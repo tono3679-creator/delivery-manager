@@ -13,7 +13,8 @@
     "db:local:reset": "./scripts/dev/reset-local-db.sh",
     "db:seed": "tsx --env-file-if-exists=.env.local scripts/seed/seed.ts",
     "db:verify": "tsx --env-file-if-exists=.env.local scripts/seed/verify.ts",
-    "dev:auth": "tsx scripts/dev/local-auth-server.ts"
+    "dev:auth": "tsx scripts/dev/local-auth-server.ts",
+    "screenshots": "tsx scripts/dev/screenshots.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

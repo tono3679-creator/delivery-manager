@@ -120,19 +120,21 @@ export default async function DispatchPage({ searchParams }: { searchParams: Sea
           <DispatchBoard day={day} today={today} nowIso={new Date().toISOString()} drivers={board.drivers} orders={active} />
         )}
 
-        {view === "board" && <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t px-4 py-3 text-xs text-muted-foreground sm:px-5">
-          <Legend className="border-dashed border-warning-strong/60 bg-card" label="未割当" />
-          <Legend className="border-brand/40 bg-info-soft" label="配車済（ドラッグ可）" />
-          <Legend className="border-warning/60 bg-warning-soft" label="集荷完了・配送中" />
-          <Legend className="border-success/40 bg-success-soft" label="配送完了" />
-          <Legend className="border-destructive/40 bg-danger-soft" label="配送失敗" />
-          <span className="flex items-center gap-1.5">
-            <TriangleAlert className="size-3.5 text-danger-strong" aria-hidden />赤枠：同じドライバーの時間が重複（警告のみ・保存は可能）
-          </span>
-          <span className="flex items-center gap-1.5">
-            <MousePointerClick className="size-3.5" aria-hidden />クリックで詳細と担当・時刻の変更（スマホは長押しでドラッグ）
-          </span>
-        </div>}
+        {view === "board" && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t px-4 py-3 text-xs text-muted-foreground sm:px-5">
+            <Legend className="border-dashed border-warning-strong/60 bg-card" label="未割当" />
+            <Legend className="border-brand/40 bg-info-soft" label="配車済（ドラッグ可）" />
+            <Legend className="border-warning/60 bg-warning-soft" label="集荷完了・配送中" />
+            <Legend className="border-success/40 bg-success-soft" label="配送完了" />
+            <Legend className="border-destructive/40 bg-danger-soft" label="配送失敗" />
+            <span className="flex items-center gap-1.5">
+              <TriangleAlert className="size-3.5 text-danger-strong" aria-hidden />赤枠：同じドライバーの時間が重複（警告のみ・保存は可能）
+            </span>
+            <span className="flex items-center gap-1.5">
+              <MousePointerClick className="size-3.5" aria-hidden />クリックで詳細と担当・時刻の変更（スマホは長押しでドラッグ）
+            </span>
+          </div>
+        )}
       </Card>
     </div>
   );

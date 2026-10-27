@@ -58,6 +58,7 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
               status={order.status}
               options={options}
               initial={orderToForm(order)}
+              version={order.version}
               editOnOpen={sp.edit === "1"}
               invoiceNo={order.invoiceNo}
             />

@@ -40,7 +40,7 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, te
 }
 
 /** 吹き出し：案件の概要（文字はすべて textContent で入れる） */
-function popupContent(o: MapOrder, onOpen: (href: string) => void): HTMLElement {
+function popupContent(o: MapOrder, detailPath: string, onOpen: (href: string) => void): HTMLElement {
   const root = el("div", "dm-map-popup space-y-1.5 text-[13px] leading-snug");
   const head = el("div", "flex items-center gap-2");
   head.append(el("span", "font-semibold tabular", o.orderNo));
@@ -60,18 +60,18 @@ function popupContent(o: MapOrder, onOpen: (href: string) => void): HTMLElement 
   root.append(el("div", "tabular", time));
   root.append(el("div", "text-muted-foreground", `${o.clientName}・${o.driverName ?? "未割当"}`));
   const link = el("a", "inline-block font-medium text-brand hover:underline", "案件の詳細を開く");
-  link.href = `/orders/${o.id}`;
+  link.href = `${detailPath}/${o.id}`;
   link.addEventListener("click", (e) => {
     if (e.metaKey || e.ctrlKey || e.shiftKey) return;
     e.preventDefault();
-    onOpen(`/orders/${o.id}`);
+    onOpen(`${detailPath}/${o.id}`);
   });
   root.append(link);
   return root;
 }
 
 export function DeliveryMap({
-  orders, fitKey, selectedId, onSelect, onOpen, className, label,
+  orders, fitKey, selectedId, onSelect, onOpen, className, label, detailPath = "/orders",
 }: {
   orders: MapOrder[];
   /** 日付や絞り込みが変わったときだけ表示範囲を合わせ直す */
@@ -81,6 +81,8 @@ export function DeliveryMap({
   onOpen: (href: string) => void;
   className?: string;
   label: string;
+  /** 吹き出しの「詳細を開く」の行き先（管理者 /orders、ドライバー /driver/orders） */
+  detailPath?: string;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const [L, setL] = useState<Leaflet | null>(null);
@@ -114,6 +116,8 @@ export function DeliveryMap({
     const placed = markers.current;
     const m = L.map(container.current, { center: DEFAULT_CENTER, zoom: 11, scrollWheelZoom: false, zoomControl: true });
     L.tileLayer(mapTileUrl, { attribution: mapTileAttribution, maxZoom: 18 }).addTo(m);
+    // 出典表示は地図データ（OpenStreetMap）を主にし、ライブラリ名は文字だけにする
+    m.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noopener noreferrer">Leaflet</a>');
     layer.current = L.layerGroup().addTo(m);
     map.current = m;
     // 外枠の大きさが後から決まる（グリッド・タブ切替）ときに備えて
@@ -137,6 +141,14 @@ export function DeliveryMap({
     group.clearLayers();
     markers.current.clear();
     const located = orders.filter((o) => o.lat !== null && o.lng !== null);
+    // 吹き出しは地図の幅に収め、左上の拡大・縮小ボタンにも重ならないようにする（スマホの細い地図に合わせる）
+    const width = container.current?.clientWidth ?? 320;
+    const popupOptions = {
+      maxWidth: Math.min(280, width - 100),
+      minWidth: Math.min(220, width - 100),
+      autoPanPaddingTopLeft: [52, 12] as [number, number],
+      autoPanPaddingBottomRight: [12, 12] as [number, number],
+    };
     for (const o of located) {
       const marker = L.marker([o.lat!, o.lng!], {
         icon: pinIcon(L, o.state, o.id === selected.current),
@@ -147,7 +159,7 @@ export function DeliveryMap({
         // 遅延・配送中を手前に
         zIndexOffset: o.id === selected.current ? 1000 : o.state === "late" ? 300 : o.state === "in_transit" ? 200 : o.state === "planned" ? 100 : 0,
       });
-      marker.bindPopup(() => popupContent(o, (href) => callbacks.current.onOpen(href)), { maxWidth: 280, minWidth: 220 });
+      marker.bindPopup(() => popupContent(o, detailPath, (href) => callbacks.current.onOpen(href)), popupOptions);
       marker.on("click", () => callbacks.current.onSelect?.(o.id));
       group.addLayer(marker);
       markers.current.set(o.id, { marker, order: o });
@@ -160,7 +172,7 @@ export function DeliveryMap({
         m.setView(DEFAULT_CENTER, 11);
       }
     }
-  }, [L, orders, fitKey]);
+  }, [L, orders, fitKey, detailPath]);
 
   // 一覧で選んだ案件を強調して吹き出しを開く（再取得のたびには開き直さない）
   useEffect(() => {

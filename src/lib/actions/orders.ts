@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 import { asAdmin } from "@/lib/auth";
-import { findDriverConflicts } from "@/lib/data/orders";
+import { findDriverConflicts, orderVersion } from "@/lib/data/orders";
 import { approximateLocation } from "@/lib/domain/location";
 import { canTransition, DELETABLE_STATUSES, ORDER_STATUS_LABEL, type OrderStatus } from "@/lib/domain/status";
 import { formatTime } from "@/lib/format";
@@ -14,7 +14,7 @@ export type Conflict = { id: string; orderNo: string; deliveryName: string; wind
 
 export type SaveResult =
   | { ok: true; id: string; orderNo: string }
-  | { ok: false; error: string; fieldErrors?: Record<string, string> }
+  | { ok: false; error: string; fieldErrors?: Record<string, string>; stale?: true }
   | { ok: false; needsConfirm: true; conflicts: Conflict[] };
 
 function revalidateOrders(id?: string) {
@@ -29,8 +29,12 @@ function revalidateOrders(id?: string) {
  * 配送案件の登録・更新。
  * 同じドライバーの予定と時間が重なる場合は、confirmOverlap が無ければ保存せずに確認を求める（警告）。
  * 休職中ドライバーへの割当などは DB 側で保存を拒否する（保存禁止）。
+ * 編集では version（編集を開いたときの更新の印）を受け取り、その後に他の人やドライバーが更新していたら上書きしない。
  */
-export async function saveOrder(input: OrderFormInput, options: { id?: string; confirmOverlap?: boolean } = {}): Promise<SaveResult> {
+export async function saveOrder(
+  input: OrderFormInput,
+  options: { id?: string; confirmOverlap?: boolean; version?: string } = {},
+): Promise<SaveResult> {
   const parsed = orderFormSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "入力内容を確認してください", fieldErrors: toFieldErrors(parsed.error) };
   const v = parsed.data;
@@ -46,9 +50,18 @@ export async function saveOrder(input: OrderFormInput, options: { id?: string; c
       if (options.id) {
         const [current] = await tx<{
           status: string; driver_id: string | null; pickup_at: Date; delivery_at: Date; client_id: string; fee: number; invoice_id: string | null;
+          version: string;
         }[]>`
-          select status, driver_id, pickup_at, delivery_at, client_id, fee, invoice_id from delivery_orders where id = ${options.id} for update`;
+          select status, driver_id, pickup_at, delivery_at, client_id, fee, invoice_id, ${orderVersion(tx)} version
+            from delivery_orders o where id = ${options.id} for update`;
         if (!current) return { ok: false as const, error: "案件が見つかりません（削除された可能性があります）" };
+        if (options.version && current.version !== options.version) {
+          return {
+            ok: false as const,
+            stale: true as const,
+            error: "編集している間に、この案件が他の人またはドライバーによって更新されました。最新の内容を読み込んでから、もう一度編集してください",
+          };
+        }
         // 請求済みの案件は請求金額の根拠（料金・荷主・配送日）を変えられない（DB のトリガーでも拒否する）
         if (current.invoice_id) {
           const fieldErrors: Record<string, string> = {};

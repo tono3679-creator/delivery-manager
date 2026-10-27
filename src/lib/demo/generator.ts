@@ -11,6 +11,7 @@ import {
   endOfMonth,
   isHoliday,
   jstDateTime,
+  jstStartOfDay,
   startOfMonth,
   toJstDate,
   type DateString,
@@ -615,7 +616,7 @@ export function generateDemoData(options: GenerateOptions): DemoDataset {
       const driverName = o.driverIndex !== null ? DRIVERS[o.driverIndex].name : "";
       const delivered = o.status === "delivered";
       notifications.push({
-        id: ids.uuid(), company_id: companyId, audience: "admin", driver_id: null,
+        id: ids.uuid(), company_id: companyId, audience: "admin", driver_id: null, order_id: o.id,
         kind: delivered ? "delivered" : "failed",
         title: delivered ? "配送が完了しました" : "配送に失敗しました",
         body: `${o.row.order_no} ${o.row.delivery_name}（${driverName}）`,
@@ -629,9 +630,24 @@ export function generateDemoData(options: GenerateOptions): DemoDataset {
     .forEach((o) => {
       notifications.push({
         id: ids.uuid(), company_id: companyId, audience: "driver",
-        driver_id: drivers[o.driverIndex as number].id, kind: "assigned",
+        driver_id: drivers[o.driverIndex as number].id, order_id: o.id, kind: "assigned",
         title: "新しい配送が割り当てられました", body: `${o.row.order_no} ${o.row.delivery_name}`,
         link: `/driver/orders/${o.id}`, read_at: null, created_at: o.assignedAt ?? now,
+      });
+    });
+
+  // ドライバーが今日書いたメモ（管理者への通知）
+  const todayStart = jstStartOfDay(today);
+  const orderNoById = new Map(orders.map((r) => [r.id as string, r.order_no as string]));
+  notes
+    .filter((n) => (n.created_at as Date) >= todayStart && (n.created_at as Date) <= now)
+    .slice(-3)
+    .forEach((n) => {
+      notifications.push({
+        id: ids.uuid(), company_id: companyId, audience: "admin", driver_id: null, order_id: n.order_id,
+        kind: "note", title: `${n.author_name as string}さんからメモが届きました`,
+        body: `${orderNoById.get(n.order_id as string) ?? ""} ${(n.body as string).replace(/\s+/g, " ").slice(0, 60)}`,
+        link: `/orders/${n.order_id as string}`, read_at: null, created_at: n.created_at,
       });
     });
 

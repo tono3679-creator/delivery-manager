@@ -97,6 +97,15 @@ export const INTEGRITY_CHECKS: { label: string; sql: string }[] = [
              or issued_on <= period_end or issued_on > app.today_jst()`,
   },
   {
+    label: "通知の案件・ドライバーは同じ会社のもので、ドライバー宛ての通知には宛先がある",
+    sql: `select count(*) n from notifications nt
+          left join delivery_orders o on o.id = nt.order_id
+          left join drivers d on d.id = nt.driver_id
+          where (nt.order_id is not null and o.company_id <> nt.company_id)
+             or (nt.driver_id is not null and d.company_id <> nt.company_id)
+             or (nt.audience = 'driver' and nt.driver_id is null)`,
+  },
+  {
     label: "現在の車両担当は1台につき1名",
     sql: `select count(*) n from (select vehicle_id from vehicle_assignments where end_on is null
           group by vehicle_id having count(*) > 1) t`,

@@ -2,21 +2,32 @@
 /**
  * 配送案件・通知の変更を受け取って画面を最新にする。
  * - Supabase Realtime で変更を購読（RLS により自分が見られる行の変更だけが届く）
- * - 切断・再接続・画面復帰のときは必ず再取得する（表示は常に DB の内容が正）
+ * - 切断・再接続・画面復帰・通信の回復のときは必ず再取得する（表示は常に DB の内容が正）
  * - Realtime が使えない環境では 30 秒ごとに再取得する
+ * - 最後に DB から取得した時刻（syncedAt：サーバーで描画した時刻）を表示に使う
  */
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { CloudOff } from "lucide-react";
+import { useOnline } from "@/lib/hooks/use-online";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { realtimeEnabled } from "@/lib/supabase/config";
+import { formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type Status = "connecting" | "live" | "offline" | "polling";
-const StatusContext = createContext<Status>("connecting");
+type Sync = { status: Status; online: boolean; syncedAt: string | null };
+const SyncContext = createContext<Sync>({ status: "connecting", online: true, syncedAt: null });
+
+/** 通信状態と最終更新時刻（ステータス操作のボタンを止める・表示が古いことを伝えるのに使う） */
+export function useSyncState(): Sync {
+  return useContext(SyncContext);
+}
 
 export function RealtimeRefresher({
-  filter, children,
-}: { filter: { column: "company_id" | "driver_id"; value: string }; children: React.ReactNode }) {
+  filter, syncedAt, children,
+}: { filter: { column: "company_id" | "driver_id"; value: string }; syncedAt: string; children: React.ReactNode }) {
+  const online = useOnline();
   const router = useRouter();
   const [status, setStatus] = useState<Status>(realtimeEnabled ? "connecting" : "polling");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -73,7 +84,7 @@ export function RealtimeRefresher({
     };
   }, [filter.column, filter.value, router]);
 
-  return <StatusContext value={status}>{children}</StatusContext>;
+  return <SyncContext value={{ status: online ? status : "offline", online, syncedAt }}>{children}</SyncContext>;
 }
 
 const LABEL: Record<Status, string> = {
@@ -84,7 +95,7 @@ const LABEL: Record<Status, string> = {
 };
 
 export function RealtimeIndicator({ className }: { className?: string }) {
-  const status = useContext(StatusContext);
+  const { status, online, syncedAt } = useSyncState();
   return (
     <div className={cn("items-center gap-1.5 text-xs text-muted-foreground", className)} aria-live="polite">
       <span
@@ -97,7 +108,26 @@ export function RealtimeIndicator({ className }: { className?: string }) {
         )}
         aria-hidden
       />
-      {LABEL[status]}
+      {online ? LABEL[status] : "オフライン"}
+      {syncedAt && <span className="tabular">・{formatTime(syncedAt)} 更新</span>}
+    </div>
+  );
+}
+
+/**
+ * 通信できないときの帯。表示が最後に取得した時点の内容であること、操作は通信が戻ってから行うことを伝える。
+ * 通信が戻ると自動で再取得する（RealtimeRefresher）。
+ */
+export function OfflineBanner({ className }: { className?: string }) {
+  const { online, syncedAt } = useSyncState();
+  if (online) return null;
+  return (
+    <div role="status" className={cn("flex items-start gap-2 bg-warning-soft px-4 py-2 text-sm text-warning-strong", className)}>
+      <CloudOff className="mt-0.5 size-4 shrink-0" aria-hidden />
+      <p>
+        <strong className="font-semibold">通信できません。</strong>
+        表示は{syncedAt ? ` ${formatTime(syncedAt)} ` : ""}時点の内容です。ステータスの更新は通信が戻ってから行ってください（戻ると自動で最新になります）。
+      </p>
     </div>
   );
 }

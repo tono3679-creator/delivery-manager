@@ -149,16 +149,23 @@ export type OrderDetail = OrderListRow & {
   invoiceIssuedOn: string | null;
   createdAt: Date;
   updatedAt: Date;
+  /** 同時編集の検知に使う更新の印（updated_at をマイクロ秒まで含めた文字列） */
+  version: string;
   logs: { id: string; from: OrderStatus | null; to: OrderStatus; by: string | null; note: string | null; at: Date }[];
   memos: { id: string; author: string; body: string; at: Date }[];
 };
+
+/** 案件の更新の印（編集を開いた後に誰かが更新したかを、保存のときに確かめる） */
+export function orderVersion(tx: Tx) {
+  return tx`(extract(epoch from o.updated_at) * 1000000)::bigint::text`;
+}
 
 export async function getOrderDetail(tx: Tx, id: string): Promise<OrderDetail | null> {
   if (!z.uuid().safeParse(id).success) return null;
   const [o] = await tx<Record<string, never>[]>`
     select o.*, c.name client_name, c.phone client_phone, c.contact_name client_contact,
            d.name driver_name, d.phone driver_phone, v.plate_number, v.vehicle_type, f.is_late,
-           ci.invoice_no, ci.issued_on invoice_issued_on
+           ci.invoice_no, ci.issued_on invoice_issued_on, ${orderVersion(tx)} version
       from delivery_orders o
       join v_order_facts f on f.id = o.id
       join clients c on c.id = o.client_id
@@ -207,6 +214,7 @@ export async function getOrderDetail(tx: Tx, id: string): Promise<OrderDetail | 
     invoiceIssuedOn: r.invoice_issued_on ? String(r.invoice_issued_on).slice(0, 10) : null,
     createdAt: r.created_at as Date,
     updatedAt: r.updated_at as Date,
+    version: r.version as string,
     logs: logs.map((l) => ({ id: l.id, from: l.from_status, to: l.to_status, by: l.changed_by_name, note: l.note, at: l.created_at })),
     memos: memos.map((m) => ({ id: m.id, author: m.author_name, body: m.body, at: m.created_at })),
   };

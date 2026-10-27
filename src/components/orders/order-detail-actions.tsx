@@ -12,11 +12,13 @@ import { OrderFormDialog } from "./order-form-dialog";
 
 /** 案件詳細の「編集」「削除」。一覧の「編集する」から来たとき（?edit=1）は編集を開いた状態で表示する */
 export function OrderDetailActions({
-  orderId, orderNo, status, options, initial, editOnOpen, invoiceNo,
+  orderId, orderNo, status, options, initial, editOnOpen, invoiceNo, version,
 }: {
   orderId: string; orderNo: string; status: OrderStatus; options: FormOptions; initial: OrderFormInput; editOnOpen: boolean;
   /** 請求済みなら請求番号（荷主と料金を変更できない） */
   invoiceNo?: string | null;
+  /** 案件の更新の印（同時編集の検知） */
+  version: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -52,6 +54,7 @@ export function OrderDetailActions({
         orderNo={orderNo}
         lock={lock}
         invoiceNo={invoiceNo ?? undefined}
+        version={version}
       />
       <DeleteOrderDialog open={deleting} onOpenChange={setDeleting} orderId={orderId} orderNo={orderNo} redirectTo="/orders" />
     </>

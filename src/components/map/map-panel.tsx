@@ -27,13 +27,15 @@ export function MapDemoNotice({ className }: { className?: string }) {
  * withList を指定すると、横に配送予定順の一覧を出し、選んだ案件の吹き出しを地図で開く。
  */
 export function MapPanel({
-  orders, fitKey, withList = false, mapClassName, label,
+  orders, fitKey, withList = false, mapClassName, label, detailPath = "/orders",
 }: {
   orders: MapOrder[];
   fitKey: string;
   withList?: boolean;
   mapClassName?: string;
   label: string;
+  /** 案件の詳細画面のパス（管理者 /orders、ドライバー /driver/orders） */
+  detailPath?: string;
 }) {
   const router = useRouter();
   const [hidden, setHidden] = useState<Set<MapState>>(() => new Set());
@@ -87,6 +89,7 @@ export function MapPanel({
           onOpen={(href) => router.push(href)}
           label={label}
           className={mapClassName ?? "h-80"}
+          detailPath={detailPath}
         />
         {withList && (
           <ol className="max-h-[560px] divide-y overflow-y-auto rounded-lg border" aria-label="案件（配送予定順）">
@@ -97,7 +100,7 @@ export function MapPanel({
                 <li key={o.id}>
                   <button
                     type="button"
-                    onClick={() => (located ? setSelectedId(o.id) : router.push(`/orders/${o.id}`))}
+                    onClick={() => (located ? setSelectedId(o.id) : router.push(`${detailPath}/${o.id}`))}
                     aria-current={selectedId === o.id ? "true" : undefined}
                     className={cn(
                       "flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-accent/60 focus-visible:bg-accent focus-visible:outline-none",

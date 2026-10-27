@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { signInWithPassword, startDemo } from "@/lib/actions/session";
 import { cn } from "@/lib/utils";
+import { safeAction } from "@/lib/client/safe-action";
 
 const schema = z.object({
   email: z.email("メールアドレスの形式が正しくありません"),
@@ -25,7 +26,7 @@ export function LoginPanel() {
   const demo = (role: "admin" | "driver") => {
     setPendingRole(role);
     startTransition(async () => {
-      const result = await startDemo(role);
+      const result = await safeAction(() => startDemo(role));
       // 成功時はサーバー側でリダイレクトされる
       if (result && !result.ok) {
         toast.error(result.error);
@@ -35,7 +36,7 @@ export function LoginPanel() {
   };
 
   const onSubmit = form.handleSubmit(async (values) => {
-    const result = await signInWithPassword(values);
+    const result = await safeAction(() => signInWithPassword(values));
     if (result && !result.ok) toast.error(result.error);
   });
 

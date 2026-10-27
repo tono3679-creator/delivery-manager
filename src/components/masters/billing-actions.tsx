@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cancelInvoice, issueInvoice } from "@/lib/actions/billing";
 import { formatNumber, formatYen } from "@/lib/format";
+import { safeAction } from "@/lib/client/safe-action";
 
 type ConfirmProps = {
   title: string;
@@ -26,7 +27,7 @@ function ConfirmAction({ title, description, confirmLabel, destructive, run, suc
   const [pending, setPending] = useState(false);
   const onConfirm = async () => {
     setPending(true);
-    const result = await run();
+    const result = await safeAction(run);
     setPending(false);
     setOpen(false);
     if (!result.ok) {

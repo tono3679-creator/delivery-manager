@@ -25,6 +25,8 @@ jobs:
       TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/dm
       NEXT_PUBLIC_SUPABASE_URL: http://localhost:54321
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: local
+      # ローカル認証サーバーにはリアルタイム配信がないため、ビルド時に無効にしておく
+      NEXT_PUBLIC_REALTIME_ENABLED: "false"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -41,3 +43,18 @@ jobs:
           npm run db:verify
       - run: npm test
       - run: npm run build
+      - name: ブラウザでの E2E テスト（PC・スマートフォン）
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:e2e
+        env:
+          E2E_COMMAND: npx next start -p 3100
+      - name: E2E の結果（失敗したときのスクリーンショット・トレース）
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

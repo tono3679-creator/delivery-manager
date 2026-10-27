@@ -8,6 +8,7 @@ import {
   AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { deleteOrder } from "@/lib/actions/orders";
+import { safeAction } from "@/lib/client/safe-action";
 
 /** 削除の確認。削除後に移動する先を指定できる（詳細画面からは一覧へ戻る） */
 export function DeleteOrderDialog({
@@ -17,7 +18,7 @@ export function DeleteOrderDialog({
   const [pending, setPending] = useState(false);
   const onDelete = async () => {
     setPending(true);
-    const result = await deleteOrder(orderId);
+    const result = await safeAction(() => deleteOrder(orderId));
     setPending(false);
     if (!result.ok) {
       toast.error(result.error);

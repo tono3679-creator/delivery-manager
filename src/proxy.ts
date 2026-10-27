@@ -1,12 +1,25 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { buildCsp, createNonce } from "@/lib/security/csp";
 import { supabasePublishableKey, supabaseUrl } from "@/lib/supabase/config";
 
 const PUBLIC_PATHS = ["/login", "/api/cron"];
 
-/** Supabase のセッション Cookie を更新し、未ログインならログイン画面へ */
+/**
+ * すべてのページの前に動く処理。
+ *   1. リクエストごとの nonce で Content Security Policy を付ける（Next.js が自分のスクリプトに nonce を付ける）
+ *   2. Supabase のセッション Cookie を更新し、未ログインならログイン画面へ
+ */
 export async function proxy(request: NextRequest) {
-  let response = NextResponse.next({ request });
+  const csp = buildCsp(createNonce(), { dev: process.env.NODE_ENV === "development" });
+  // Cookie を更新したあとのリクエストヘッダーに CSP を加えて次へ渡す
+  const next = () => {
+    const headers = new Headers(request.headers);
+    headers.set("content-security-policy", csp);
+    return NextResponse.next({ request: { headers } });
+  };
+
+  let response = next();
   const supabase = createServerClient(supabaseUrl, supabasePublishableKey, {
     cookies: {
       getAll() {
@@ -14,7 +27,7 @@ export async function proxy(request: NextRequest) {
       },
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = NextResponse.next({ request });
+        response = next();
         cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
       },
     },
@@ -24,11 +37,16 @@ export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}/`));
   if (!data?.claims && !isPublic) {
+    // API は画面へ移動させず、401 を返す
+    if (path.startsWith("/api/")) {
+      return NextResponse.json({ error: "ログインしてください" }, { status: 401, headers: { "content-security-policy": csp } });
+    }
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = "";
     return NextResponse.redirect(url);
   }
+  response.headers.set("content-security-policy", csp);
   return response;
 }
 

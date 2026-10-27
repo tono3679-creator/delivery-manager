@@ -173,3 +173,13 @@ export function toDateString(value: Date | string): string {
   if (typeof value === "string") return value.slice(0, 10);
   return value.toISOString().slice(0, 10);
 }
+
+/** ある日の案件数（キャンセルを除く）と未割当の数。本日の配送が終わったあとに翌日の予定を案内するために使う */
+export async function getDayCounts(tx: Tx, day: DateString): Promise<{ total: number; unassigned: number }> {
+  const [row] = await tx<{ total: number; unassigned: number }[]>`
+    select count(*) filter (where status <> 'cancelled')::int total,
+           count(*) filter (where status = 'unassigned')::int unassigned
+      from delivery_orders
+     where delivery_at >= app.jst_start(${day}::date) and delivery_at < app.jst_start(${day}::date + 1)`;
+  return row;
+}

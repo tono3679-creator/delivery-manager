@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, unstable_rethrow } from "next/navigation";
 import { toast } from "sonner";
 import { CircleCheckBig, CircleX, Loader2, PackageCheck, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -52,7 +52,8 @@ export function DriverStatusActions({ orderId, orderNo, status }: { orderId: str
       } else {
         toast.error(result.error);
       }
-    } catch {
+    } catch (e) {
+      unstable_rethrow(e);
       // 通信できないときはサーバーに届いていない。表示は変えずに再操作してもらう
       toast.error("通信できませんでした。電波の良い場所でもう一度お試しください");
     } finally {

@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, unstable_rethrow } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,8 @@ export function NoteForm({ orderId, action, placeholder = "例：守衛室で受
         let result: Awaited<ReturnType<NoteAction>>;
         try {
           result = await action({ orderId, body });
-        } catch {
+        } catch (e) {
+      unstable_rethrow(e);
           // 送れなかったときは入力を残し、もう一度送れるようにする
           toast.error("通信できませんでした。入力内容は残っています。通信が戻ってからもう一度送ってください");
           return;

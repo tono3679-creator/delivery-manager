@@ -8,6 +8,13 @@ begin
 end $$;
 grant anon, authenticated, service_role to current_user;
 
+-- Supabase と同じく、public スキーマに作る表・関数・シーケンスへ全権限を既定で付ける
+-- （本番と同じ状態から始めて、マイグレーションで締め直せていることをテストで確かめるため）
+grant usage on schema public to anon, authenticated, service_role;
+alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
+alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
+alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
+
 create schema if not exists extensions;
 create extension if not exists pgcrypto with schema extensions;
 create extension if not exists pg_trgm with schema extensions;

@@ -22,7 +22,8 @@ export default async function DriverOrderPage({ params }: Props) {
   // RLS により、他のドライバーの案件は取得できない（存在しない扱い）
   const order = await asDriver((tx) => getDriverOrder(tx, id));
   if (!order) notFound();
-  const toPickup = order.status === "assigned";
+  // 次の行き先：集荷前は集荷先、集荷後は配送先。完了・失敗・キャンセル後は強調しない
+  const next = order.status === "assigned" ? "pickup" : order.status === "picked_up" || order.status === "in_transit" ? "delivery" : null;
 
   return (
     <div className="space-y-4 pt-2">
@@ -52,17 +53,17 @@ export default async function DriverOrderPage({ params }: Props) {
             label="集荷先"
             name={order.clientName}
             address={order.pickupAddress}
-            highlight={toPickup}
+            highlight={next === "pickup"}
             extra={order.clientContact ? `担当：${order.clientContact}` : undefined}
           />
-          <Stop icon={MapPin} label="配送先" name={order.deliveryName} address={order.deliveryAddress} highlight={!toPickup} />
+          <Stop icon={MapPin} label="配送先" name={order.deliveryName} address={order.deliveryAddress} highlight={next === "delivery"} />
           <div className="grid grid-cols-2 gap-2">
-            <Button asChild size="lg" variant={toPickup ? "brand" : "outline"}>
+            <Button asChild size="lg" variant={next === "pickup" ? "brand" : "outline"}>
               <a href={directionsUrl(order.pickupAddress)} target="_blank" rel="noopener noreferrer">
                 <Navigation aria-hidden />集荷先へ案内
               </a>
             </Button>
-            <Button asChild size="lg" variant={toPickup ? "outline" : "brand"}>
+            <Button asChild size="lg" variant={next === "delivery" ? "brand" : "outline"}>
               <a href={directionsUrl(order.deliveryAddress)} target="_blank" rel="noopener noreferrer">
                 <Navigation aria-hidden />配送先へ案内
               </a>

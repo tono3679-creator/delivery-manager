@@ -14,4 +14,9 @@ export const serverEnv = {
   get cronSecret() {
     return process.env.CRON_SECRET ?? "";
   },
+  /** 同時に存在できるデモ会社の上限（1社あたり約 12MB。データベースの容量に合わせて調整する） */
+  get demoMaxActive() {
+    const n = Number(process.env.DEMO_MAX_ACTIVE);
+    return Number.isInteger(n) && n > 0 ? n : 30;
+  },
 };

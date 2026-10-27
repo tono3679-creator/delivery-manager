@@ -19,6 +19,7 @@ import type { ExpenseFormOptions } from "@/lib/data/analytics";
 import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_LABEL } from "@/lib/domain/labels";
 import { formatYen } from "@/lib/format";
 import { expenseSchema, type ExpenseInput, type ExpenseValues } from "@/lib/validation/master";
+import { safeAction } from "@/lib/client/safe-action";
 
 const NONE = "__none";
 
@@ -33,7 +34,7 @@ function ExpenseFormDialog({
   const submit = async (values: ExpenseInput) => {
     setSubmitting(true);
     try {
-      const result = await saveExpense(values, id);
+      const result = await safeAction(() => saveExpense(values, id));
       if (result.ok) {
         toast.success(id ? "経費を更新しました" : `${EXPENSE_CATEGORY_LABEL[values.category]} ${formatYen(values.amount)} を登録しました`);
         onOpenChange(false);
@@ -65,7 +66,7 @@ function ExpenseFormDialog({
                 control={control}
                 name="category"
                 render={({ field }) => (
-                  <Select value={field.value || undefined} onValueChange={field.onChange}>
+                  <Select value={field.value ?? ""} onValueChange={field.onChange}>
                     <SelectTrigger id="category" aria-invalid={!!errors.category}><SelectValue placeholder="選択してください" /></SelectTrigger>
                     <SelectContent>
                       {EXPENSE_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{EXPENSE_CATEGORY_LABEL[c]}</SelectItem>)}
@@ -147,7 +148,7 @@ export function ExpenseRowActions({
 
   const onDelete = async () => {
     setPending(true);
-    const result = await deleteExpense(id);
+    const result = await safeAction(() => deleteExpense(id));
     setPending(false);
     setConfirm(false);
     if (!result.ok) return toast.error(result.error);

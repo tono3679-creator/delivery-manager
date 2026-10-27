@@ -66,6 +66,10 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Se
   const clientRanks = ranks(data.clients.map((c) => c.revenue));
   const driverRanks = ranks(data.drivers.map((d) => d.revenue));
   const compare = `${p.label}（${formatDate(p.from)}〜${formatDate(p.to)}）`;
+  // 比較期間の途中から記録が始まっている場合は増減を出さない
+  const pct = (current: number, previous: number) => (p.complete ? change(current, previous) : null);
+  const pt = (current: number | null, previous: number | null) => (p.complete ? diff(current, previous) : null);
+  const prevAmount = (value: number) => (p.complete ? `${p.label} ${formatYenCompact(value)}` : undefined);
 
   return (
     <div className="space-y-5">
@@ -80,26 +84,33 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Se
         <p className="text-sm text-muted-foreground">
           <span className="font-medium text-foreground tabular">{formatDate(period.from)}〜{formatDate(period.to)}</span>
           <span className="ml-2 text-xs">比較：{compare}</span>
+          {!p.complete && (
+            <span className="block text-xs text-warning-strong sm:text-right">
+              {p.recordStart
+                ? `記録の開始（${formatDate(p.recordStart)}）より前を含むため、増減は表示しません`
+                : "比較できる記録がありません"}
+            </span>
+          )}
         </p>
       </Card>
 
       <section aria-label="期間の実績" className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <KpiCard label="売上" value={formatYen(s.revenue)} icon={TrendingUp} tone="brand" trend={change(s.revenue, p.revenue)}
-          sub={`${p.label} ${formatYenCompact(p.revenue)}`} />
-        <KpiCard label="経費" value={formatYen(s.expense)} icon={Receipt} tone="warning" trend={change(s.expense, p.expense)} trendGood="down"
-          sub={`${p.label} ${formatYenCompact(p.expense)}`} />
+        <KpiCard label="売上" value={formatYen(s.revenue)} icon={TrendingUp} tone="brand" trend={pct(s.revenue, p.revenue)}
+          sub={prevAmount(p.revenue)} />
+        <KpiCard label="経費" value={formatYen(s.expense)} icon={Receipt} tone="warning" trend={pct(s.expense, p.expense)} trendGood="down"
+          sub={prevAmount(p.expense)} />
         <KpiCard label="粗利益" value={formatYen(s.grossProfit)} icon={PiggyBank} tone={s.grossProfit < 0 ? "danger" : "success"}
-          trend={change(s.grossProfit, p.grossProfit)} sub={`${p.label} ${formatYenCompact(p.grossProfit)}`} />
+          trend={pct(s.grossProfit, p.grossProfit)} sub={prevAmount(p.grossProfit)} />
         <KpiCard label="粗利益率" value={formatPercent(s.grossMargin)} icon={Percent} tone="success"
-          sub={<><Trend value={diff(s.grossMargin, p.grossMargin)} unit="pt" /><span>粗利益 ÷ 売上</span></>} />
-        <KpiCard label="配送件数" value={formatNumber(s.orderCount)} unit="件" icon={Package} trend={change(s.orderCount, p.orderCount)}
+          sub={<><Trend value={pt(s.grossMargin, p.grossMargin)} unit="pt" /><span>粗利益 ÷ 売上</span></>} />
+        <KpiCard label="配送件数" value={formatNumber(s.orderCount)} unit="件" icon={Package} trend={pct(s.orderCount, p.orderCount)}
           sub="キャンセルを除く" />
         <KpiCard label="配送完了" value={formatNumber(s.deliveredCount)} unit="件" icon={CircleCheckBig} tone="success"
-          trend={change(s.deliveredCount, p.deliveredCount)} sub={`完了率 ${formatPercent(s.orderCount === 0 ? null : (s.deliveredCount / s.orderCount) * 100)}`} />
+          trend={pct(s.deliveredCount, p.deliveredCount)} sub={`完了率 ${formatPercent(s.orderCount === 0 ? null : (s.deliveredCount / s.orderCount) * 100)}`} />
         <KpiCard label="平均単価" value={formatYen(s.averageFee)} icon={Wallet}
-          trend={s.averageFee === null || p.averageFee === null ? null : change(s.averageFee, p.averageFee)} sub="配送完了1件あたり" />
+          trend={s.averageFee === null || p.averageFee === null ? null : pct(s.averageFee, p.averageFee)} sub="配送完了1件あたり" />
         <KpiCard label="遅延率" value={formatPercent(s.lateRate)} icon={AlarmClock} tone={s.lateCount > 0 ? "danger" : "default"}
-          sub={<><Trend value={diff(s.lateRate, p.lateRate)} unit="pt" good="down" /><span>遅延 {formatNumber(s.lateCount, "件")}</span></>} />
+          sub={<><Trend value={pt(s.lateRate, p.lateRate)} unit="pt" good="down" /><span>遅延 {formatNumber(s.lateCount, "件")}</span></>} />
       </section>
 
       <Card>

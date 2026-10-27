@@ -42,6 +42,7 @@ export default async function DriversPage({ searchParams }: { searchParams: Sear
           selects={[
             { key: "status", label: "ステータス", allLabel: "すべてのステータス", options: DRIVER_STATUSES.map((s) => ({ value: s, label: DRIVER_STATUS_LABEL[s] })) },
             { key: "employment", label: "雇用形態", allLabel: "すべての雇用形態", options: EMPLOYMENT_TYPES.map((t) => ({ value: t, label: EMPLOYMENT_TYPE_LABEL[t] })) },
+            { key: "office", label: "営業所", allLabel: "すべての営業所", options: offices.map((o) => ({ value: o.id, label: o.name })) },
           ]}
         />
         <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b bg-muted/40 px-4 py-2.5 text-sm sm:px-5">
@@ -53,7 +54,7 @@ export default async function DriversPage({ searchParams }: { searchParams: Sear
           <EmptyState icon={Users} title="条件に合うドライバーはいません" description="検索条件を変えるか、「条件をクリア」で絞り込みを解除してください。" />
         ) : (
           <>
-            <div className="hidden md:block">
+            <div className="hidden xl:block">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -90,7 +91,7 @@ export default async function DriversPage({ searchParams }: { searchParams: Sear
                 </TableBody>
               </Table>
             </div>
-            <ul className="divide-y md:hidden">
+            <ul className="divide-y xl:hidden">
               {drivers.map((d) => (
                 <li key={d.id}>
                   <Link href={`/drivers/${d.id}`} className="block space-y-1.5 px-4 py-3">

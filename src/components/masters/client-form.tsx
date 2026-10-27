@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Field } from "@/components/common/form-field";
 import { saveClient } from "@/lib/actions/masters";
 import { clientSchema, type ClientInput, type ClientValues } from "@/lib/validation/master";
+import { safeAction } from "@/lib/client/safe-action";
 
 export function ClientFormButton({
   initial, id, code, variant = "new",
@@ -34,7 +35,7 @@ export function ClientFormButton({
   const submit = async (values: ClientInput) => {
     setSubmitting(true);
     try {
-      const result = await saveClient(values, id);
+      const result = await safeAction(() => saveClient(values, id));
       if (result.ok) {
         toast.success(id ? `${values.name} を更新しました` : `${values.name} を登録しました（${result.code}）`, {
           action: id ? undefined : { label: "詳細を見る", onClick: () => router.push(`/clients/${result.id}`) },

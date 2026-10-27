@@ -10,7 +10,7 @@ export function ViewAsDriverButton({ driverId, driverName, orderId }: { driverId
   return (
     <Button
       variant="outline"
-      className="w-full"
+      className="h-auto min-h-9 w-full py-2 whitespace-normal"
       disabled={pending}
       onClick={() => startTransition(() => switchDemoRole("driver", driverId, `/driver/orders/${orderId}`))}
     >

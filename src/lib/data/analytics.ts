@@ -119,17 +119,30 @@ export function previousPeriod(period: Period): { from: DateString; to: DateStri
   }
 }
 
+/** 自社の記録の開始日（最初の案件の配送予定日と最初の経費の日付の早いほう）。記録がなければ null */
+export async function getRecordStart(tx: Tx): Promise<DateString | null> {
+  const [r] = await tx<{ start: string | null }[]>`
+    select least(
+      (select (min(delivery_at) at time zone 'Asia/Tokyo')::date from delivery_orders),
+      (select min(spent_on) from expenses)
+    )::text as start`;
+  return r.start as DateString | null;
+}
+
 export async function getAnalytics(tx: Tx, period: Period) {
   const prev = previousPeriod(period);
-  const [summary, previous, series, breakdown, drivers, clients] = await Promise.all([
+  const [summary, previous, series, breakdown, drivers, clients, recordStart] = await Promise.all([
     getAnalyticsSummary(tx, period.from, period.to),
     getAnalyticsSummary(tx, prev.from, prev.to),
     getSalesSeries(tx, period.from, period.to, period.grain),
     getExpenseBreakdown(tx, period.from, period.to),
     getDriverPerformance(tx, period.from, period.to),
     getClientRanking(tx, period.from, period.to),
+    getRecordStart(tx),
   ]);
-  return { summary, previous: { ...previous, ...prev }, series, breakdown, drivers, clients };
+  // 比較する期間の途中から記録が始まっている場合は、増減率を出さない（記録のない日を 0 として比べると極端な値になる）
+  const complete = recordStart !== null && recordStart <= prev.from;
+  return { summary, previous: { ...previous, ...prev, complete, recordStart }, series, breakdown, drivers, clients };
 }
 
 // ---------------------------------------------------------------

@@ -14,6 +14,7 @@ import { Field } from "@/components/common/form-field";
 import { saveVehicle } from "@/lib/actions/masters";
 import { VEHICLE_STATUSES, VEHICLE_STATUS_LABEL } from "@/lib/domain/labels";
 import { vehicleSchema, type VehicleInput, type VehicleValues } from "@/lib/validation/master";
+import { safeAction } from "@/lib/client/safe-action";
 
 /**
  * 車両の登録・編集ボタン。
@@ -40,7 +41,7 @@ export function VehicleFormButton({
   const submit = async (values: VehicleInput) => {
     setSubmitting(true);
     try {
-      const result = await saveVehicle(values, id);
+      const result = await safeAction(() => saveVehicle(values, id));
       if (result.ok) {
         toast.success(id ? `${values.plateNumber} を更新しました` : `${values.plateNumber} を登録しました（${result.code}）`, {
           action: id ? undefined : { label: "詳細を見る", onClick: () => router.push(`/vehicles/${result.id}`) },

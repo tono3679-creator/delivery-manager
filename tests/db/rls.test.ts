@@ -1,6 +1,6 @@
 /**
  * DB テスト：権限分離（RLS）・ステータス遷移・集計。
- * ローカルの PostgreSQL（scripts/dev/local-supabase-shim.sql ＋ マイグレーション適用済み）で実行する。
+ * ローカルの PostgreSQL（npm run db:local:reset で db/bootstrap.sql ＋ マイグレーション適用済み）で実行する。
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Sql } from "postgres";

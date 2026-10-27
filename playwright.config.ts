@@ -3,13 +3,14 @@ import { defineConfig, devices } from "@playwright/test";
 /**
  * ブラウザでの E2E テスト（npm run test:e2e）。
  *
- * ローカル PostgreSQL（npm run db:local:reset && npm run db:seed 済み）と、ローカル認証サーバーを使う。
+ * ローカル PostgreSQL（npm run db:local:reset && npm run db:seed 済み）を使う。
  * テストごとに「デモを体験」から専用のデモ会社を作るので、テスト同士・既存データと干渉しない。
  *
  *   npm run test:e2e                               … next dev で起動して実行
  *   E2E_COMMAND="npx next start -p 3100" npm run test:e2e   … ビルド済みのアプリで実行（CI）
- *   E2E_BASE_URL=https://… DATABASE_URL=… npx playwright test  … 公開環境に対して実行（アプリは起動しない。
- *                                                              DATABASE_URL はテストで作ったデモ会社の片付けに使う）
+ *   E2E_BASE_URL=https://… npx playwright test     … 公開環境に対して実行（アプリは起動しない。
+ *                                                    テストで作ったデモは画面の「デモを終了する」で片付ける。
+ *                                                    E2E_LOGIN_PASSWORD を渡すと、見本の会社へのログインも確かめる）
  */
 const PORT = 3100;
 const EXTERNAL_URL = process.env.E2E_BASE_URL?.replace(/\/$/, "");
@@ -49,27 +50,16 @@ export default defineConfig({
       grep: /@mobile|@both/,
     },
   ],
-  webServer: EXTERNAL_URL ? undefined : [
-    {
-      command: "npx tsx scripts/dev/local-auth-server.ts",
-      url: "http://localhost:54321/auth/v1/health",
-      reuseExistingServer: !process.env.CI,
-      env: { DATABASE_URL },
-      stdout: "ignore",
+  webServer: EXTERNAL_URL ? undefined : {
+    command: process.env.E2E_COMMAND ?? `npx next dev -p ${PORT}`,
+    url: `${BASE_URL}/login`,
+    reuseExistingServer: !process.env.CI,
+    timeout: 180_000,
+    env: {
+      DATABASE_URL,
+      // テストごとにデモ会社を作るため、数の上限・作成の回数の制限に当たらないようにする
+      DEMO_MAX_ACTIVE: "1000",
+      DEMO_CREATE_LIMIT_PER_HOUR: "100000",
     },
-    {
-      command: process.env.E2E_COMMAND ?? `npx next dev -p ${PORT}`,
-      url: `${BASE_URL}/login`,
-      reuseExistingServer: !process.env.CI,
-      timeout: 180_000,
-      env: {
-        DATABASE_URL,
-        NEXT_PUBLIC_SUPABASE_URL: "http://localhost:54321",
-        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "local",
-        NEXT_PUBLIC_REALTIME_ENABLED: "false",
-        // テストごとにデモ会社を作るため、上限に当たらないようにする
-        DEMO_MAX_ACTIVE: "1000",
-      },
-    },
-  ],
+  },
 });

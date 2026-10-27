@@ -19,7 +19,7 @@ export default async function DriverLayout({ children }: { children: React.React
     return { notifications, sharingSince };
   });
   return (
-    <RealtimeRefresher filter={{ column: "driver_id", value: user.driverId }} syncedAt={new Date().toISOString()}>
+    <RealtimeRefresher syncedAt={new Date().toISOString()}>
       <LocationSharingProvider initiallySharing={sharingSince !== null}>
         <div className="min-h-dvh bg-background pb-[calc(4rem+env(safe-area-inset-bottom))]">
           {user.isDemo && <DemoBanner role="driver" className="sticky top-0 z-30" />}

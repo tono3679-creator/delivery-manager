@@ -1,8 +1,8 @@
 /**
  * DB テスト：表・関数の権限（Phase 5）。
- * Supabase は public スキーマの表・関数に全権限を既定で付けるため（ローカルのシムでも同じ状態を再現している）、
+ * db/bootstrap.sql は public スキーマの表・関数に全権限を既定で付けるため（以前使っていた Supabase と同じ既定）、
  * マイグレーションで「アプリが使う権限だけ」に締め直せていることを確かめる。
- * データ API（PostgREST）からログイン中のトークンで直接呼ばれても、ここに書いた以上のことはできない。
+ * 新しい表・関数を足して締め直しを忘れると、このテストが失敗する。
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Sql, TransactionSql } from "postgres";

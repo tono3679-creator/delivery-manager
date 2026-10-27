@@ -23,10 +23,6 @@ jobs:
       LOCAL_DB: dm
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/dm
       TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/dm
-      NEXT_PUBLIC_SUPABASE_URL: http://localhost:54321
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: local
-      # ローカル認証サーバーにはリアルタイム配信がないため、ビルド時に無効にしておく
-      NEXT_PUBLIC_REALTIME_ENABLED: "false"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

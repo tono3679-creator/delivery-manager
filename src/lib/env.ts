@@ -19,4 +19,12 @@ export const serverEnv = {
     const n = Number(process.env.DEMO_MAX_ACTIVE);
     return Number.isInteger(n) && n > 0 ? n : 30;
   },
+  /**
+   * 同じ接続元から1時間に作れるデモ環境の数（大量作成の対策）。
+   * 既定は 30（以前使っていた Supabase Auth の匿名ログインの既定の上限と同じ）。E2E テストでは大きくする
+   */
+  get demoCreateLimitPerHour() {
+    const n = Number(process.env.DEMO_CREATE_LIMIT_PER_HOUR);
+    return Number.isInteger(n) && n > 0 ? n : 30;
+  },
 };

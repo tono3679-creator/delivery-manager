@@ -1,45 +1,41 @@
 "use client";
 /**
- * 配送案件・通知の変更を受け取って画面を最新にする。
- * - Supabase Realtime で変更を購読（RLS により自分が見られる行の変更だけが届く）
- * - 切断・再接続・画面復帰・通信の回復のときは必ず再取得する（表示は常に DB の内容が正）
- * - Realtime が使えない環境では 30 秒ごとに再取得する
+ * 配送案件・通知の変更を画面に反映する（定期的な再取得）。
+ * - 画面を開いている間は 30 秒ごとに再取得する（裏に回っている間・10分以上操作がない間は止める。lib/hooks/idle.ts）
+ * - 画面に戻ったとき・操作を再開したとき・通信が回復したときはすぐに再取得する（表示は常に DB の内容が正）
+ * - 自分の操作（ステータス更新など）はサーバーの処理の中で再取得されるので、待たずに反映される
  * - 最後に DB から取得した時刻（syncedAt：サーバーで描画した時刻）を表示に使う
  */
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CloudOff } from "lucide-react";
+import { isIdle, onResume, shouldPoll } from "@/lib/hooks/idle";
 import { useOnline } from "@/lib/hooks/use-online";
-import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
-import { realtimeEnabled } from "@/lib/supabase/config";
 import { formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-type Status = "connecting" | "live" | "offline" | "polling";
+/** 再取得の間隔 */
+export const POLL_INTERVAL_MS = 30_000;
+
+type Status = "polling" | "paused" | "offline";
 type Sync = { status: Status; online: boolean; syncedAt: string | null };
-const SyncContext = createContext<Sync>({ status: "connecting", online: true, syncedAt: null });
+const SyncContext = createContext<Sync>({ status: "polling", online: true, syncedAt: null });
 
 /** 通信状態と最終更新時刻（ステータス操作のボタンを止める・表示が古いことを伝えるのに使う） */
 export function useSyncState(): Sync {
   return useContext(SyncContext);
 }
 
-export function RealtimeRefresher({
-  filter, syncedAt, children,
-}: { filter: { column: "company_id" | "driver_id"; value: string }; syncedAt: string; children: React.ReactNode }) {
+export function RealtimeRefresher({ syncedAt, children }: { syncedAt: string; children: React.ReactNode }) {
   const online = useOnline();
   const router = useRouter();
-  const [status, setStatus] = useState<Status>(realtimeEnabled ? "connecting" : "polling");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const statusRef = useRef<Status>(status);
-  useEffect(() => {
-    statusRef.current = status;
-  }, [status]);
+  const [paused, setPaused] = useState(false);
 
   useEffect(() => {
     const refresh = () => {
       if (timer.current) clearTimeout(timer.current);
-      // 連続した変更はまとめて1回だけ再取得する
+      // 続けて起きたきっかけ（画面復帰と通信の回復など）はまとめて1回だけ再取得する
       timer.current = setTimeout(() => router.refresh(), 400);
     };
     const onVisible = () => {
@@ -47,68 +43,48 @@ export function RealtimeRefresher({
     };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("online", refresh);
-
-    let cleanup = () => {};
-    if (realtimeEnabled) {
-      const supabase = getSupabaseBrowserClient();
-      const channel = supabase
-        .channel(`orders:${filter.column}:${filter.value}`)
-        .on("postgres_changes", { event: "*", schema: "public", table: "delivery_orders", filter: `${filter.column}=eq.${filter.value}` }, refresh)
-        .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `${filter.column}=eq.${filter.value}` }, refresh)
-        .subscribe((state) => {
-          if (state === "SUBSCRIBED") {
-            setStatus((prev) => {
-              // 再接続できたら、切断中に起きた変更を取りこぼさないよう再取得
-              if (prev === "offline") refresh();
-              return "live";
-            });
-          } else if (state === "CHANNEL_ERROR" || state === "TIMED_OUT" || state === "CLOSED") {
-            setStatus("offline");
-          }
-        });
-      cleanup = () => {
-        supabase.removeChannel(channel);
-      };
-    }
-
     const poll = setInterval(() => {
-      if (document.visibilityState === "visible" && (!realtimeEnabled || statusRef.current === "offline")) router.refresh();
-    }, 30_000);
+      if (isIdle()) setPaused(true);
+      else if (shouldPoll()) router.refresh();
+    }, POLL_INTERVAL_MS);
+    const stopResume = onResume(() => {
+      setPaused(false);
+      refresh();
+    });
 
     return () => {
-      cleanup();
       clearInterval(poll);
+      stopResume();
       if (timer.current) clearTimeout(timer.current);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("online", refresh);
     };
-  }, [filter.column, filter.value, router]);
+  }, [router]);
 
-  return <SyncContext value={{ status: online ? status : "offline", online, syncedAt }}>{children}</SyncContext>;
+  const status: Status = !online ? "offline" : paused ? "paused" : "polling";
+  return <SyncContext value={{ status, online, syncedAt }}>{children}</SyncContext>;
 }
 
 const LABEL: Record<Status, string> = {
-  connecting: "接続中…",
-  live: "リアルタイム更新中",
-  offline: "再接続中（自動で再取得します）",
   polling: "自動更新（30秒ごと）",
+  paused: "自動更新を停止中（操作すると再開）",
+  offline: "オフライン",
 };
 
 export function RealtimeIndicator({ className }: { className?: string }) {
-  const { status, online, syncedAt } = useSyncState();
+  const { status, syncedAt } = useSyncState();
   return (
     <div className={cn("items-center gap-1.5 text-xs text-muted-foreground", className)} aria-live="polite">
       <span
         className={cn(
           "size-2 rounded-full",
-          status === "live" && "bg-success",
           status === "polling" && "bg-brand",
-          status === "connecting" && "animate-pulse bg-muted-foreground",
+          status === "paused" && "bg-muted-foreground",
           status === "offline" && "animate-pulse bg-warning",
         )}
         aria-hidden
       />
-      {online ? LABEL[status] : "オフライン"}
+      {LABEL[status]}
       {syncedAt && <span className="tabular">・{formatTime(syncedAt)} 更新</span>}
     </div>
   );

@@ -227,3 +227,49 @@ export function defaultOrderRange() {
   const today = todayJst();
   return { from: addDays(today, -7), to: addDays(today, 7) };
 }
+
+/** CSV で書き出せる最大件数（これを超える場合は期間などで絞り込んでもらう） */
+export const ORDER_EXPORT_LIMIT = 20_000;
+
+export type OrderExportRow = {
+  orderNo: string; clientCode: string; clientName: string; pickupAddress: string; deliveryName: string; deliveryAddress: string;
+  pickupAt: Date; deliveryAt: Date; driverName: string | null; vehiclePlate: string | null; cargoType: string; quantity: number;
+  fee: number; status: OrderStatus; isLate: boolean; completedAt: Date | null; invoiceNo: string | null; notes: string | null;
+  createdAt: Date; updatedAt: Date;
+};
+
+/** 一覧と同じ検索条件で、CSV 用に全件（上限あり）を配送予定の古い順に取得する */
+export async function exportOrders(tx: Tx, f: OrderFilters): Promise<{ rows: OrderExportRow[]; total: number }> {
+  const where = whereClause(tx, f);
+  const [[count], rows] = await Promise.all([
+    tx<{ n: number }[]>`select count(*)::int n from delivery_orders o join v_order_facts f on f.id = o.id where ${where}`,
+    tx<{
+      order_no: string; client_code: string; client_name: string; pickup_address: string; delivery_name: string; delivery_address: string;
+      pickup_at: Date; delivery_at: Date; driver_name: string | null; plate_number: string | null; cargo_type: string; quantity: number;
+      fee: number; status: OrderStatus; is_late: boolean; completed_at: Date | null; invoice_no: string | null; notes: string | null;
+      created_at: Date; updated_at: Date;
+    }[]>`
+      select o.order_no, c.code client_code, c.name client_name, o.pickup_address, o.delivery_name, o.delivery_address,
+             o.pickup_at, o.delivery_at, d.name driver_name, v.plate_number, o.cargo_type, o.quantity, o.fee, o.status,
+             f.is_late, o.completed_at, ci.invoice_no, o.notes, o.created_at, o.updated_at
+        from delivery_orders o
+        join v_order_facts f on f.id = o.id
+        join clients c on c.id = o.client_id
+        left join drivers d on d.id = o.driver_id
+        left join vehicles v on v.id = o.vehicle_id
+        left join client_invoices ci on ci.id = o.invoice_id
+       where ${where}
+       order by o.delivery_at, o.order_no
+       limit ${ORDER_EXPORT_LIMIT}`,
+  ]);
+  return {
+    total: count.n,
+    rows: rows.map((r) => ({
+      orderNo: r.order_no, clientCode: r.client_code, clientName: r.client_name, pickupAddress: r.pickup_address,
+      deliveryName: r.delivery_name, deliveryAddress: r.delivery_address, pickupAt: r.pickup_at, deliveryAt: r.delivery_at,
+      driverName: r.driver_name, vehiclePlate: r.plate_number, cargoType: r.cargo_type, quantity: r.quantity, fee: r.fee,
+      status: r.status, isLate: r.is_late, completedAt: r.completed_at, invoiceNo: r.invoice_no, notes: r.notes,
+      createdAt: r.created_at, updatedAt: r.updated_at,
+    })),
+  };
+}

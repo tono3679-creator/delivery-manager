@@ -7,10 +7,18 @@ import { Input } from "@/components/ui/input";
 import { addDays, isDateString } from "@/lib/date";
 import { formatDateLong } from "@/lib/format";
 
-/** 表示日の切り替え（前日・翌日・今日・日付指定） */
-export function DayNav({ day, today, basePath = "/dispatch" }: { day: string; today: string; basePath?: string }) {
+/** 表示日の切り替え（前日・翌日・今日・日付指定）。keep の条件（表示切替・絞り込み）は引き継ぐ */
+export function DayNav({
+  day, today, basePath = "/dispatch", keep = {},
+}: { day: string; today: string; basePath?: string; keep?: Record<string, string | undefined> }) {
   const router = useRouter();
-  const href = (d: string) => (d === today ? basePath : `${basePath}?date=${d}`);
+  const href = (d: string) => {
+    const q = new URLSearchParams();
+    if (d !== today) q.set("date", d);
+    for (const [k, v] of Object.entries(keep)) if (v) q.set(k, v);
+    const s = q.toString();
+    return s ? `${basePath}?${s}` : basePath;
+  };
   return (
     <div className="flex flex-wrap items-center gap-2">
       <div className="flex items-center">

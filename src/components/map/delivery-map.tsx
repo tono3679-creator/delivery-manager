@@ -1,0 +1,191 @@
+"use client";
+/**
+ * 配送先の地図（Leaflet + OpenStreetMap）。
+ * - Leaflet はブラウザ専用のため、表示するときに読み込む
+ * - 吹き出しは DOM で組み立て、案件の文字（利用者の入力）を HTML として解釈しない
+ * - 画面の再取得（リアルタイム更新）ではマーカーだけ差し替え、利用者が動かした表示位置は保つ。
+ *   表示位置を合わせ直すのは fitKey（日付・絞り込み）が変わったときだけ
+ */
+import "leaflet/dist/leaflet.css";
+import { useEffect, useRef, useState } from "react";
+import type { LayerGroup, Map as LeafletMap, Marker } from "leaflet";
+import type { MapOrder } from "@/lib/data/map";
+import { MAP_STATE_COLOR, MAP_STATE_LABEL, type MapState } from "@/lib/domain/map";
+import { ORDER_STATUS_LABEL } from "@/lib/domain/status";
+import { formatTime } from "@/lib/format";
+import { mapTileAttribution, mapTileUrl } from "@/lib/map-config";
+import { pinSvg } from "./pin";
+import { cn } from "@/lib/utils";
+
+type Leaflet = typeof import("leaflet");
+
+/** 東京駅付近（案件が無いときの初期表示） */
+const DEFAULT_CENTER: [number, number] = [35.6812, 139.7671];
+
+function pinIcon(L: Leaflet, state: MapState, selected: boolean) {
+  return L.divIcon({
+    className: "dm-map-pin",
+    html: pinSvg(state, selected ? "lg" : "md"),
+    iconSize: selected ? [34, 45] : [26, 35],
+    iconAnchor: selected ? [17, 44] : [13, 34],
+    popupAnchor: [0, selected ? -40 : -30],
+  });
+}
+
+function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
+  const node = document.createElement(tag);
+  node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+/** 吹き出し：案件の概要（文字はすべて textContent で入れる） */
+function popupContent(o: MapOrder, onOpen: (href: string) => void): HTMLElement {
+  const root = el("div", "dm-map-popup space-y-1.5 text-[13px] leading-snug");
+  const head = el("div", "flex items-center gap-2");
+  head.append(el("span", "font-semibold tabular", o.orderNo));
+  const badge = el("span", "rounded-full px-1.5 py-px text-[11px] font-medium text-white", MAP_STATE_LABEL[o.state]);
+  badge.style.background = MAP_STATE_COLOR[o.state];
+  head.append(badge);
+  // 区分と実際のステータスが違うとき（例：配送予定のうち「未割当」）だけ補足する
+  if (ORDER_STATUS_LABEL[o.status] !== MAP_STATE_LABEL[o.state]) {
+    head.append(el("span", "text-[11px] text-muted-foreground", ORDER_STATUS_LABEL[o.status]));
+  }
+  root.append(head);
+  root.append(el("div", "font-medium", o.deliveryName));
+  root.append(el("div", "text-muted-foreground", o.deliveryAddress));
+  const time = o.completedAt
+    ? `予定 ${formatTime(o.deliveryAt)}・完了 ${formatTime(o.completedAt)}${o.completedLate ? "（遅れて完了）" : ""}`
+    : `集荷 ${formatTime(o.pickupAt)} → 配送予定 ${formatTime(o.deliveryAt)}`;
+  root.append(el("div", "tabular", time));
+  root.append(el("div", "text-muted-foreground", `${o.clientName}・${o.driverName ?? "未割当"}`));
+  const link = el("a", "inline-block font-medium text-brand hover:underline", "案件の詳細を開く");
+  link.href = `/orders/${o.id}`;
+  link.addEventListener("click", (e) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+    e.preventDefault();
+    onOpen(`/orders/${o.id}`);
+  });
+  root.append(link);
+  return root;
+}
+
+export function DeliveryMap({
+  orders, fitKey, selectedId, onSelect, onOpen, className, label,
+}: {
+  orders: MapOrder[];
+  /** 日付や絞り込みが変わったときだけ表示範囲を合わせ直す */
+  fitKey: string;
+  selectedId?: string | null;
+  onSelect?: (id: string) => void;
+  onOpen: (href: string) => void;
+  className?: string;
+  label: string;
+}) {
+  const container = useRef<HTMLDivElement>(null);
+  const [L, setL] = useState<Leaflet | null>(null);
+  const [failed, setFailed] = useState(false);
+  const map = useRef<LeafletMap | null>(null);
+  const layer = useRef<LayerGroup | null>(null);
+  const markers = useRef(new Map<string, { marker: Marker; order: MapOrder }>());
+  const fitted = useRef<string | null>(null);
+  const callbacks = useRef({ onSelect, onOpen });
+  const selected = useRef(selectedId ?? null);
+  useEffect(() => {
+    callbacks.current = { onSelect, onOpen };
+  }, [onSelect, onOpen]);
+
+  // Leaflet の読み込み（ブラウザのみ）
+  useEffect(() => {
+    let cancelled = false;
+    import("leaflet")
+      .then((mod) => {
+        if (!cancelled) setL(("default" in mod ? mod.default : mod) as Leaflet);
+      })
+      .catch(() => !cancelled && setFailed(true));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 地図の作成
+  useEffect(() => {
+    if (!L || !container.current) return;
+    const placed = markers.current;
+    const m = L.map(container.current, { center: DEFAULT_CENTER, zoom: 11, scrollWheelZoom: false, zoomControl: true });
+    L.tileLayer(mapTileUrl, { attribution: mapTileAttribution, maxZoom: 18 }).addTo(m);
+    layer.current = L.layerGroup().addTo(m);
+    map.current = m;
+    // 外枠の大きさが後から決まる（グリッド・タブ切替）ときに備えて
+    const resize = new ResizeObserver(() => m.invalidateSize());
+    resize.observe(container.current);
+    return () => {
+      resize.disconnect();
+      m.remove();
+      map.current = null;
+      layer.current = null;
+      placed.clear();
+      fitted.current = null;
+    };
+  }, [L]);
+
+  // マーカーの差し替え
+  useEffect(() => {
+    const m = map.current;
+    const group = layer.current;
+    if (!L || !m || !group) return;
+    group.clearLayers();
+    markers.current.clear();
+    const located = orders.filter((o) => o.lat !== null && o.lng !== null);
+    for (const o of located) {
+      const marker = L.marker([o.lat!, o.lng!], {
+        icon: pinIcon(L, o.state, o.id === selected.current),
+        title: `${o.orderNo} ${MAP_STATE_LABEL[o.state]} ${o.deliveryName}`,
+        alt: `${o.orderNo} ${MAP_STATE_LABEL[o.state]}`,
+        keyboard: true,
+        riseOnHover: true,
+        // 遅延・配送中を手前に
+        zIndexOffset: o.id === selected.current ? 1000 : o.state === "late" ? 300 : o.state === "in_transit" ? 200 : o.state === "planned" ? 100 : 0,
+      });
+      marker.bindPopup(() => popupContent(o, (href) => callbacks.current.onOpen(href)), { maxWidth: 280, minWidth: 220 });
+      marker.on("click", () => callbacks.current.onSelect?.(o.id));
+      group.addLayer(marker);
+      markers.current.set(o.id, { marker, order: o });
+    }
+    if (fitted.current !== fitKey) {
+      fitted.current = fitKey;
+      if (located.length > 0) {
+        m.fitBounds(L.latLngBounds(located.map((o) => [o.lat!, o.lng!] as [number, number])), { padding: [36, 36], maxZoom: 14 });
+      } else {
+        m.setView(DEFAULT_CENTER, 11);
+      }
+    }
+  }, [L, orders, fitKey]);
+
+  // 一覧で選んだ案件を強調して吹き出しを開く（再取得のたびには開き直さない）
+  useEffect(() => {
+    const prev = selected.current;
+    selected.current = selectedId ?? null;
+    if (!L || !map.current) return;
+    const before = prev ? markers.current.get(prev) : undefined;
+    if (before) {
+      before.marker.setIcon(pinIcon(L, before.order.state, false));
+      before.marker.setZIndexOffset(0);
+    }
+    const target = selectedId ? markers.current.get(selectedId) : undefined;
+    if (target) {
+      target.marker.setIcon(pinIcon(L, target.order.state, true));
+      target.marker.setZIndexOffset(1000);
+      map.current.panTo(target.marker.getLatLng(), { animate: true });
+      target.marker.openPopup();
+    }
+  }, [L, selectedId]);
+
+  return (
+    <div className={cn("relative isolate overflow-hidden rounded-lg border bg-muted", className)}>
+      <div ref={container} className="absolute inset-0" role="region" aria-label={label} />
+      {!L && !failed && <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">地図を読み込んでいます…</div>}
+      {failed && <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">地図を読み込めませんでした。再読み込みしてください。</div>}
+    </div>
+  );
+}

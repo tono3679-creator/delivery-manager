@@ -11,7 +11,8 @@ const lines = async (download: Download) => {
 test.describe("CSV 入出力", () => {
   test("一覧と同じ条件で書き出され、件数が一致する", async ({ adminPage: page }) => {
     const today = jstDate(0);
-    await page.goto(`/orders?from=${today}&to=${today}`);
+    // 直近1週間（休日は案件が少ないため1日だけにしない）
+    await page.goto(`/orders?from=${jstDate(-7)}&to=${today}`);
     const total = await readTotal(page);
     expect(total).toBeGreaterThan(0);
     const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: /CSV 書き出し/ }).click()]);

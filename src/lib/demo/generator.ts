@@ -155,6 +155,8 @@ export function generateDemoData(options: GenerateOptions): DemoDataset {
     id: companyId,
     name: options.companyName ?? DEMO_COMPANY_NAME,
     is_demo: options.isDemo,
+    // 生成するデータはすべて架空なので、位置を共有していないドライバーは模擬位置で地図に出す
+    simulate_locations: true,
     demo_owner: options.demoOwner ?? null,
     demo_expires_at: options.demoExpiresAt ?? null,
     demo_seed: options.seed,

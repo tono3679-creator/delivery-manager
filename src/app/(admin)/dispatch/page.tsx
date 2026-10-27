@@ -10,6 +10,7 @@ import { MapPanel } from "@/components/map/map-panel";
 import { NewOrderButton } from "@/components/orders/new-order-button";
 import { asAdmin } from "@/lib/auth";
 import { getDispatchBoard } from "@/lib/data/dispatch";
+import { getDriverPositions } from "@/lib/data/driver-positions";
 import { getMapOrders } from "@/lib/data/map";
 import { getFormOptions } from "@/lib/data/orders";
 import { getDayCounts } from "@/lib/data/dashboard";
@@ -33,14 +34,17 @@ export default async function DispatchPage({ searchParams }: { searchParams: Sea
   const driverFilter = view === "map" && typeof sp.driver === "string" ? sp.driver : undefined;
 
   const nextDay = addDays(day, 1);
-  const { board, options, mapOrders, next } = await asAdmin(async (tx) => {
-    const [board, options, mapOrders, next] = await Promise.all([
+  // ドライバーの現在地は本日の地図だけ（過去・未来の日には意味がない）
+  const live = view === "map" && day === today;
+  const { board, options, mapOrders, next, driverPositions } = await asAdmin(async (tx) => {
+    const [board, options, mapOrders, next, driverPositions] = await Promise.all([
       getDispatchBoard(tx, day),
       getFormOptions(tx),
       view === "map" ? getMapOrders(tx, day, driverFilter) : Promise.resolve(null),
       day === today ? getDayCounts(tx, nextDay) : Promise.resolve(null),
+      live ? getDriverPositions(tx) : Promise.resolve(null),
     ]);
-    return { board, options, mapOrders, next };
+    return { board, options, mapOrders, next, driverPositions };
   });
   const viewHref = (v: "board" | "map") => {
     const q = new URLSearchParams();
@@ -68,7 +72,9 @@ export default async function DispatchPage({ searchParams }: { searchParams: Sea
       <PageHeader
         title="配車管理"
         description={view === "map"
-          ? "配送先を地図で確認できます。マーカーか右の一覧を選ぶと案件の概要を表示します。"
+          ? day === today
+            ? "配送先とドライバーの現在地を地図で確認できます。マーカーか右の一覧を選ぶと概要を表示します。"
+            : "配送先を地図で確認できます。マーカーか右の一覧を選ぶと案件の概要を表示します。"
           : "案件をドライバーの行へドラッグすると配車できます。横に動かすと時刻も変わります（15分単位）。"}
         actions={<NewOrderButton options={options} defaultDay={day < today ? addDays(today, 1) : day} label="案件を登録" />}
       />
@@ -126,6 +132,9 @@ export default async function DispatchPage({ searchParams }: { searchParams: Sea
               withList
               mapClassName="h-[420px] lg:h-[560px]"
               label={`${formatDateLong(day)}の配送先の地図`}
+              drivers={driverPositions}
+              liveDrivers={live}
+              driverFilter={driverFilter}
             />
           </div>
         ) : active.length === 0 ? (

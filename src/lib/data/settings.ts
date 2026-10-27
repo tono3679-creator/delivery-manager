@@ -74,6 +74,7 @@ export async function listAuditLogs(tx: Tx, p: AuditParams): Promise<{ rows: Aud
            case l.entity
              when 'delivery_order' then exists (select 1 from delivery_orders x where x.id = l.entity_id)
              when 'driver' then exists (select 1 from drivers x where x.id = l.entity_id)
+             when 'driver_location' then exists (select 1 from drivers x where x.id = l.entity_id)
              when 'vehicle' then exists (select 1 from vehicles x where x.id = l.entity_id)
              when 'client' then exists (select 1 from clients x where x.id = l.entity_id)
              when 'client_invoice' then exists (select 1 from client_invoices x where x.id = l.entity_id)

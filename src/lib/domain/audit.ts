@@ -16,6 +16,8 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   unassign_vehicle: "担当車両を解除",
   issue: "請求書を発行",
   cancel: "請求を取り消し",
+  share_start: "位置情報の共有を開始",
+  share_stop: "位置情報の共有を停止",
 };
 
 export const AUDIT_ENTITY_LABEL: Record<string, string> = {
@@ -27,13 +29,14 @@ export const AUDIT_ENTITY_LABEL: Record<string, string> = {
   expense: "経費",
   company: "会社情報",
   office: "営業所",
+  driver_location: "位置情報",
 };
 
 /** 操作履歴の絞り込み（画面のタブ）。値は URL の log パラメータ */
 export const AUDIT_FILTERS = [
   { key: "", label: "すべて", entities: [] },
   { key: "orders", label: "配送案件・配車", entities: ["delivery_order"] },
-  { key: "masters", label: "ドライバー・車両・荷主", entities: ["driver", "vehicle", "client"] },
+  { key: "masters", label: "ドライバー・車両・荷主", entities: ["driver", "driver_location", "vehicle", "client"] },
   { key: "money", label: "請求・経費", entities: ["client_invoice", "expense"] },
   { key: "settings", label: "会社・営業所", entities: ["company", "office"] },
 ] as const satisfies readonly { key: string; label: string; entities: readonly string[] }[];
@@ -86,6 +89,8 @@ export function describeAudit(r: AuditRow): string {
       return d.from ? `「${str(d.from)}」→「${str(d.to)}」` : str(d.to);
     case "office":
       return str(d.name);
+    case "driver_location":
+      return str(d.driverName);
     default:
       return "";
   }
@@ -98,6 +103,7 @@ export function auditHref(r: AuditRow): string | null {
     case "delivery_order":
       return `/orders/${r.entityId}`;
     case "driver":
+    case "driver_location":
       return `/drivers/${r.entityId}`;
     case "vehicle":
       return `/vehicles/${r.entityId}`;

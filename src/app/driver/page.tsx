@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { LateBadge, StatusBadge } from "@/components/common/status-badge";
 import { DriverOrderCardLink } from "@/components/driver/order-card";
 import { DriverStatusActions } from "@/components/driver/driver-status-actions";
+import { LocationSharingCard } from "@/components/driver/location-sharing";
 import { asDriver } from "@/lib/auth";
 import { todayJst } from "@/lib/date";
 import { getDriverDay, getDriverMonthStats, getDriverUpcoming } from "@/lib/data/driver";
@@ -123,6 +124,8 @@ export default async function DriverHomePage() {
           </div>
         </section>
       )}
+
+      <LocationSharingCard isDemo={user.isDemo} />
 
       {upcoming.length > 0 && (
         <section className="space-y-2" aria-labelledby="upcoming-heading">

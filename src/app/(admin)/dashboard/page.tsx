@@ -17,6 +17,7 @@ import { asAdmin } from "@/lib/auth";
 import {
   getClientRanking, getDashboardAlerts, getDashboardKpis, getDashboardSeries, getDriverPerformance, getTodayOrders, getDayCounts,
 } from "@/lib/data/dashboard";
+import { getDriverPositions } from "@/lib/data/driver-positions";
 import { getMapOrders } from "@/lib/data/map";
 import { addDays, startOfMonth, todayJst } from "@/lib/date";
 import { formatNumber, formatPercent, formatTime, formatYen, formatYenCompact } from "@/lib/format";
@@ -27,8 +28,8 @@ export default async function DashboardPage() {
   const today = todayJst();
   const monthStart = startOfMonth(today);
   const tomorrow = addDays(today, 1);
-  const { kpis, series, drivers, clients, orders, alerts, mapOrders, next } = await asAdmin(async (tx) => {
-    const [kpis, series, drivers, clients, orders, alerts, mapOrders, next] = await Promise.all([
+  const { kpis, series, drivers, clients, orders, alerts, mapOrders, next, driverPositions } = await asAdmin(async (tx) => {
+    const [kpis, series, drivers, clients, orders, alerts, mapOrders, next, driverPositions] = await Promise.all([
       getDashboardKpis(tx, today),
       getDashboardSeries(tx, today),
       getDriverPerformance(tx, monthStart, today),
@@ -37,8 +38,9 @@ export default async function DashboardPage() {
       getDashboardAlerts(tx, today),
       getMapOrders(tx, today),
       getDayCounts(tx, tomorrow),
+      getDriverPositions(tx),
     ]);
-    return { kpis, series, drivers, clients, orders, alerts, mapOrders, next };
+    return { kpis, series, drivers, clients, orders, alerts, mapOrders, next, driverPositions };
   });
   const dayDone = kpis.planned > 0 && kpis.inProgress === 0 && kpis.notStarted === 0;
 
@@ -90,7 +92,14 @@ export default async function DashboardPage() {
             {dayDone && (
               <DayDoneNotice delivered={kpis.delivered} failed={kpis.failed} nextDay={tomorrow} nextCount={next.total} nextUnassigned={next.unassigned} view="map" />
             )}
-            <MapPanel orders={mapOrders} fitKey={today} mapClassName="h-72 sm:h-80" label="本日の配送先の地図" />
+            <MapPanel
+              orders={mapOrders}
+              fitKey={today}
+              mapClassName="h-72 sm:h-80"
+              label="本日の配送先とドライバーの現在地の地図"
+              drivers={driverPositions}
+              liveDrivers
+            />
           </CardContent>
         </Card>
         <AlertsCard alerts={alerts} />

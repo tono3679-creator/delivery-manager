@@ -43,6 +43,7 @@ const EXPECTED_TABLE_PRIVILEGES: Record<string, string[]> = {
   delivery_notes: ["INSERT", "SELECT"],
   delivery_orders: ["DELETE", "INSERT", "SELECT", "UPDATE"],
   delivery_status_logs: ["SELECT"],
+  driver_locations: ["SELECT"],
   drivers: ["DELETE", "INSERT", "SELECT", "UPDATE"],
   expenses: ["DELETE", "INSERT", "SELECT", "UPDATE"],
   notifications: ["SELECT"],
@@ -59,7 +60,8 @@ const EXPECTED_COLUMN_UPDATES = ["client_invoices.notes", "companies.name", "not
 const EXPECTED_FUNCTIONS = [
   "admin_update_status", "analytics_by_client", "analytics_by_driver", "analytics_expense_breakdown",
   "analytics_order_series", "analytics_series", "analytics_summary", "can_transition", "cancel_client_invoice",
-  "dashboard_kpis", "demo_switch_role", "driver_update_status", "issue_client_invoice", "refresh_late_alerts",
+  "dashboard_kpis", "demo_switch_role", "driver_report_location", "driver_stop_location_sharing", "driver_update_status",
+  "issue_client_invoice", "refresh_late_alerts",
 ];
 
 describe("表・関数の権限", () => {
@@ -127,15 +129,15 @@ describe("表・関数の権限", () => {
 });
 
 describe("会社の情報", () => {
-  it("管理者は自社の会社名だけ変更でき、デモの期限・所有者・連番は変更できない", async () => {
+  it("管理者は自社の会社名だけ変更でき、デモの期限・所有者・連番・模擬位置の設定は変更できない", async () => {
     const before = await sql<{ name: string; demo_expires_at: Date }[]>`
       select name, demo_expires_at from companies where id = ${a.companyId}`;
     const updated = await asAdminA((tx) => tx`update companies set name = 'テスト運送' where id = ${a.companyId} returning id`);
     expect(updated).toHaveLength(1);
 
-    for (const column of ["demo_expires_at", "is_demo", "demo_owner", "order_seq"] as const) {
+    for (const column of ["demo_expires_at", "is_demo", "demo_owner", "order_seq", "simulate_locations"] as const) {
       const value = column === "demo_expires_at" ? sql`now() + interval '100 years'`
-        : column === "is_demo" ? sql`false`
+        : column === "is_demo" || column === "simulate_locations" ? sql`false`
         : column === "demo_owner" ? sql`null`
         : sql`0`;
       await expect(

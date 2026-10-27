@@ -165,6 +165,10 @@ export function DeliveryMap({
     resize.observe(container.current);
     return () => {
       resize.disconnect();
+      // Leaflet 1.9 は、ズームのアニメーション中に地図を消すと、約250ms 後の終了処理が消えた地図に触れてエラーになる
+      // （拡大の直後に別の画面へ移ったときなど）。消す前にアニメーションを終わらせておく
+      const zoom = m as unknown as { _animatingZoom?: boolean; _onZoomTransitionEnd?: () => void };
+      if (zoom._animatingZoom) zoom._onZoomTransitionEnd?.();
       m.remove();
       map.current = null;
       layer.current = null;

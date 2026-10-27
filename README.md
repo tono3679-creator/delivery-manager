@@ -112,7 +112,7 @@ npm run dev                     # http://localhost:3000
 npm run typecheck
 npm run lint
 npm test            # 単体テスト・DB テスト（206件）
-npm run test:e2e    # ブラウザでの E2E テスト（PC 11件・スマートフォン 6件）
+npm run test:e2e    # ブラウザでの E2E テスト（PC 12件・スマートフォン 6件）
 ```
 
 | 種類 | 主な内容 |

@@ -22,6 +22,7 @@ import { overlappingIds } from "@/lib/domain/schedule";
 import { ORDER_STATUS_LABEL, type OrderStatus } from "@/lib/domain/status";
 import { cn } from "@/lib/utils";
 import { OrderSheet } from "./order-sheet";
+import { safeAction } from "@/lib/client/safe-action";
 
 const LANE_HEIGHT = 40;
 const ROW_PADDING = 6;
@@ -143,7 +144,7 @@ export function DispatchBoard({
       ...prev,
       [input.orderId]: { driverId: input.driverId, pickupAt: input.pickupAt ?? base.pickupAt, deliveryAt: input.deliveryAt ?? base.deliveryAt },
     }));
-    const result = await assignOrder(input);
+    const result = await safeAction(() => assignOrder(input));
     if (!result.ok && "needsConfirm" in result) {
       setConfirm({ input, conflicts: result.conflicts, message });
       return;
@@ -153,7 +154,7 @@ export function DispatchBoard({
       toast.success(message);
     } else {
       toast.error(result.error);
-      if (result.stale) router.refresh();
+      if ("stale" in result && result.stale) router.refresh();
     }
   };
 
@@ -192,14 +193,14 @@ export function DispatchBoard({
     if (!confirm) return;
     setConfirming(true);
     const { input, message } = confirm;
-    const result = await assignOrder({ ...input, confirmOverlap: true });
+    const result = await safeAction(() => assignOrder({ ...input, confirmOverlap: true }));
     setConfirming(false);
     setConfirm(null);
     setOverrides((prev) => without(prev, input.orderId));
     if (result.ok) toast.success(`${message}（時間の重複あり）`);
     else if ("error" in result) {
       toast.error(result.error);
-      if (result.stale) router.refresh();
+      if ("stale" in result && result.stale) router.refresh();
     }
   };
 

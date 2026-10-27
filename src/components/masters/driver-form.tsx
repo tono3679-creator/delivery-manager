@@ -14,6 +14,7 @@ import { Field } from "@/components/common/form-field";
 import { saveDriver } from "@/lib/actions/masters";
 import { DRIVER_STATUSES, DRIVER_STATUS_LABEL, EMPLOYMENT_TYPES, EMPLOYMENT_TYPE_LABEL } from "@/lib/domain/labels";
 import { driverSchema, type DriverInput, type DriverValues } from "@/lib/validation/master";
+import { safeAction } from "@/lib/client/safe-action";
 
 const NONE = "__none";
 
@@ -44,7 +45,7 @@ export function DriverFormButton({
   const submit = async (values: DriverInput) => {
     setSubmitting(true);
     try {
-      const result = await saveDriver(values, id);
+      const result = await safeAction(() => saveDriver(values, id));
       if (result.ok) {
         toast.success(id ? `${values.name}さんの情報を更新しました` : `${values.name}さんを登録しました（${result.code}）`, {
           action: id ? undefined : { label: "詳細を見る", onClick: () => router.push(`/drivers/${result.id}`) },

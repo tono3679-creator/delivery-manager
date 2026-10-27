@@ -11,6 +11,7 @@ import { changeOrderStatus } from "@/lib/actions/orders";
 import { assignOrder } from "@/lib/actions/dispatch";
 import { CANCEL_REASONS, FAILURE_REASONS } from "@/lib/domain/reasons";
 import { adminActions, ORDER_STATUS_LABEL, type AdminAction, type OrderStatus } from "@/lib/domain/status";
+import { safeAction } from "@/lib/client/safe-action";
 
 /** 案件詳細のステータス操作。画面に表示中のステータスを送り、DB 側で一致を確認してから更新する */
 export function StatusActions({
@@ -25,8 +26,8 @@ export function StatusActions({
   const run = async (action: AdminAction, withNote?: string) => {
     setPending(action.label);
     const result = action.kind === "unassign"
-      ? await assignOrder({ orderId, driverId: null, expectedStatus: status, expectedDriverId: driverId })
-      : await changeOrderStatus({ orderId, expected: status, to: action.to, note: withNote });
+      ? await safeAction(() => assignOrder({ orderId, driverId: null, expectedStatus: status, expectedDriverId: driverId }))
+      : await safeAction(() => changeOrderStatus({ orderId, expected: status, to: action.to, note: withNote }));
     setPending(null);
     if (result.ok) {
       toast.success(action.kind === "unassign" ? "配車を解除しました" : `「${ORDER_STATUS_LABEL[action.to]}」に変更しました`);

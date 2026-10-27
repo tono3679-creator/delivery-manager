@@ -7,6 +7,7 @@ import {
   AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { resetDemo } from "@/lib/actions/session";
+import { unstable_rethrow } from "next/navigation";
 
 /** デモデータを初期状態に戻す（確認してから実行する） */
 export function DemoResetButton() {
@@ -19,7 +20,8 @@ export function DemoResetButton() {
         await resetDemo();
         toast.success("デモデータを初期状態に戻しました", { id });
         setOpen(false);
-      } catch {
+      } catch (e) {
+      unstable_rethrow(e);
         toast.error("初期化できませんでした。時間をおいて再度お試しください", { id });
       }
     });

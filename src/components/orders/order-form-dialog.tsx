@@ -18,6 +18,7 @@ import { saveOrder, type Conflict } from "@/lib/actions/orders";
 import { DRIVER_STATUS_LABEL, type DriverStatus } from "@/lib/domain/labels";
 import { orderFormSchema, type OrderFormInput, type OrderFormValues } from "@/lib/validation/order";
 import type { FormOptions } from "@/lib/data/orders";
+import { safeAction } from "@/lib/client/safe-action";
 
 const NONE = "__none";
 
@@ -58,7 +59,7 @@ export function OrderFormDialog({
   const submit = async (values: OrderFormInput, confirmOverlap = false) => {
     setSubmitting(true);
     try {
-      const result = await saveOrder(values, { id: orderId, confirmOverlap, version: baseVersion });
+      const result = await safeAction(() => saveOrder(values, { id: orderId, confirmOverlap, version: baseVersion }));
       if (result.ok) {
         toast.success(orderId ? `${result.orderNo} を更新しました` : `${result.orderNo} を登録しました`, {
           action: orderId ? undefined : { label: "詳細を見る", onClick: () => router.push(`/orders/${result.id}`) },

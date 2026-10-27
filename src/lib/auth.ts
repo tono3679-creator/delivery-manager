@@ -67,6 +67,17 @@ export async function requireDriver(): Promise<CurrentUser & { driverId: string 
   return user as CurrentUser & { driverId: string };
 }
 
+/**
+ * API（Route Handler）用の管理者チェック。画面と違ってリダイレクトせず、401 / 403 の JSON を返せるようにする。
+ * 戻り値が Response のときはそのまま返す。
+ */
+export async function adminApiGuard(): Promise<Response | null> {
+  const user = await getCurrentUser();
+  if (!user) return Response.json({ error: "ログインしてください" }, { status: 401 });
+  if (user.role !== "admin") return Response.json({ error: "この操作を行う権限がありません" }, { status: 403 });
+  return null;
+}
+
 /** 管理者として RLS 付きで実行（Server Actions とデータ取得の入口） */
 export async function asAdmin<T>(fn: (tx: Tx, user: CurrentUser) => Promise<T>): Promise<T> {
   const user = await requireAdmin();

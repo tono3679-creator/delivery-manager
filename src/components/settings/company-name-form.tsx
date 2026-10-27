@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, unstable_rethrow } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -32,7 +32,8 @@ export function CompanyNameForm({ name }: { name: string }) {
         if (result.fieldErrors?.name) setError("name", { message: result.fieldErrors.name });
         toast.error(result.error);
       }
-    } catch {
+    } catch (e) {
+      unstable_rethrow(e);
       toast.error("通信できませんでした。接続を確認してから、もう一度お試しください");
     } finally {
       setSubmitting(false);

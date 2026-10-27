@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { asAdmin } from "@/lib/auth";
+import { adminApiGuard, asAdmin } from "@/lib/auth";
 import { toCsv } from "@/lib/csv/csv";
 import { compactDate, csvResponse } from "@/lib/csv/download";
 import { formatCsvDateTime, ORDER_EXPORT_HEADER } from "@/lib/csv/orders";
@@ -12,6 +12,8 @@ import { ORDER_STATUS_LABEL } from "@/lib/domain/status";
  * 管理者のみ（RLS により自社の案件だけ）。書き出したことは操作履歴に残す。
  */
 export async function GET(request: NextRequest) {
+  const denied = await adminApiGuard();
+  if (denied) return denied;
   const filters = parseOrderFilters(Object.fromEntries(request.nextUrl.searchParams));
   // ページ・並び順は書き出しに関係しない
   const conditions = { ...filters, page: undefined, sort: undefined, dir: undefined };

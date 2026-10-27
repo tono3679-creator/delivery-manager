@@ -37,6 +37,10 @@ export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}/`));
   if (!data?.claims && !isPublic) {
+    // API は画面へ移動させず、401 を返す
+    if (path.startsWith("/api/")) {
+      return NextResponse.json({ error: "ログインしてください" }, { status: 401, headers: { "content-security-policy": csp } });
+    }
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = "";

@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { assignVehicle } from "@/lib/actions/masters";
+import { safeAction } from "@/lib/client/safe-action";
 
 const NONE = "__none";
 
@@ -42,7 +43,7 @@ export function AssignVehicleButton({
     else if (currentId) input = { vehicleId: currentId, driverId: null };
     else return setOpen(false);
     setPending(true);
-    const result = await assignVehicle(input);
+    const result = await safeAction(() => assignVehicle(input));
     setPending(false);
     if (!result.ok) {
       toast.error(result.error);

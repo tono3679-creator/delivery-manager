@@ -1,4 +1,4 @@
-import { asAdmin } from "@/lib/auth";
+import { adminApiGuard, asAdmin } from "@/lib/auth";
 import { toCsv } from "@/lib/csv/csv";
 import { csvResponse } from "@/lib/csv/download";
 import { ORDER_IMPORT_HEADER } from "@/lib/csv/orders";
@@ -8,6 +8,8 @@ import { addDays, todayJst } from "@/lib/date";
  * 取り込み用のひな形（見出し＋記入例2行）。記入例には自社の荷主コード・ドライバー名を使い、そのまま取り込んでも通る値にする。
  */
 export async function GET() {
+  const denied = await adminApiGuard();
+  if (denied) return denied;
   const { client, driver } = await asAdmin(async (tx) => {
     const [[client], [driver]] = await Promise.all([
       tx<{ code: string; address: string | null }[]>`select code, address from clients order by code limit 1`,

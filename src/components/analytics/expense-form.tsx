@@ -19,6 +19,7 @@ import type { ExpenseFormOptions } from "@/lib/data/analytics";
 import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_LABEL } from "@/lib/domain/labels";
 import { formatYen } from "@/lib/format";
 import { expenseSchema, type ExpenseInput, type ExpenseValues } from "@/lib/validation/master";
+import { safeAction } from "@/lib/client/safe-action";
 
 const NONE = "__none";
 
@@ -33,7 +34,7 @@ function ExpenseFormDialog({
   const submit = async (values: ExpenseInput) => {
     setSubmitting(true);
     try {
-      const result = await saveExpense(values, id);
+      const result = await safeAction(() => saveExpense(values, id));
       if (result.ok) {
         toast.success(id ? "経費を更新しました" : `${EXPENSE_CATEGORY_LABEL[values.category]} ${formatYen(values.amount)} を登録しました`);
         onOpenChange(false);
@@ -147,7 +148,7 @@ export function ExpenseRowActions({
 
   const onDelete = async () => {
     setPending(true);
-    const result = await deleteExpense(id);
+    const result = await safeAction(() => deleteExpense(id));
     setPending(false);
     setConfirm(false);
     if (!result.ok) return toast.error(result.error);

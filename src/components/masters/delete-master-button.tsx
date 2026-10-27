@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, unstable_rethrow } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -30,7 +30,8 @@ export function DeleteMasterButton({
     let result: Awaited<ReturnType<(typeof ACTIONS)[typeof kind]>>;
     try {
       result = await ACTIONS[kind](id);
-    } catch {
+    } catch (e) {
+      unstable_rethrow(e);
       toast.error("通信できませんでした。接続を確認してから、もう一度お試しください");
       return;
     } finally {

@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, unstable_rethrow } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -37,7 +37,8 @@ export function OfficeFormButton({ initial = EMPTY_OFFICE_FORM, id }: { initial?
         for (const [k, msg] of Object.entries(result.fieldErrors ?? {})) setError(k as keyof OfficeInput, { message: msg });
         toast.error(result.error);
       }
-    } catch {
+    } catch (e) {
+      unstable_rethrow(e);
       toast.error("通信できませんでした。接続を確認してから、もう一度お試しください");
     } finally {
       setSubmitting(false);

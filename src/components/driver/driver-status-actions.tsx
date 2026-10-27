@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { CircleCheckBig, CircleX, Loader2, PackageCheck, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useSyncState } from "@/components/realtime/realtime-refresher";
 import {
   AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
@@ -33,6 +34,8 @@ export function DriverStatusActions({ orderId, orderNo, status }: { orderId: str
   const [failOpen, setFailOpen] = useState(false);
   const [note, setNote] = useState("");
   const actions = driverActions(status);
+  // 通信できないときは押せないようにする（送れなかった操作が完了したように見えないように）
+  const { online } = useSyncState();
 
   const run = async (to: OrderStatus, withNote?: string) => {
     setPending(to);
@@ -72,7 +75,7 @@ export function DriverStatusActions({ orderId, orderNo, status }: { orderId: str
               size="xl"
               variant={isFail ? "outline" : a.to === "delivered" ? "success" : "brand"}
               className={cn(isFail && "px-4 text-destructive hover:text-destructive")}
-              disabled={pending !== null}
+              disabled={pending !== null || !online}
               onClick={() => (a.to === "delivered" ? setConfirmDone(true) : isFail ? setFailOpen(true) : run(a.to))}
             >
               {pending === a.to ? <Loader2 className="size-5 animate-spin" aria-hidden /> : <Icon className="size-5" aria-hidden />}
@@ -81,6 +84,11 @@ export function DriverStatusActions({ orderId, orderNo, status }: { orderId: str
           );
         })}
       </div>
+      {!online && (
+        <p className="mt-2 text-center text-xs text-warning-strong" role="status">
+          通信できないため、ステータスを更新できません。電波の良い場所で、通信が戻ってから操作してください。
+        </p>
+      )}
 
       <AlertDialog open={confirmDone} onOpenChange={setConfirmDone}>
         <AlertDialogContent>
@@ -90,7 +98,7 @@ export function DriverStatusActions({ orderId, orderNo, status }: { orderId: str
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={pending !== null}>戻る</AlertDialogCancel>
-            <Button variant="success" size="lg" disabled={pending !== null} onClick={() => run("delivered")}>
+            <Button variant="success" size="lg" disabled={pending !== null || !online} onClick={() => run("delivered")}>
               {pending === "delivered" && <Loader2 className="animate-spin" aria-hidden />}
               配送完了にする
             </Button>
@@ -130,7 +138,7 @@ export function DriverStatusActions({ orderId, orderNo, status }: { orderId: str
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" size="lg" onClick={() => setFailOpen(false)}>戻る</Button>
-              <Button type="submit" variant="destructive" size="lg" disabled={!note.trim() || pending !== null}>
+              <Button type="submit" variant="destructive" size="lg" disabled={!note.trim() || pending !== null || !online}>
                 {pending === "failed" && <Loader2 className="animate-spin" aria-hidden />}
                 配送失敗として報告
               </Button>

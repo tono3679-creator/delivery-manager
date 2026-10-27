@@ -13,7 +13,7 @@
 | Phase 1 基盤 | レイアウト・DB設計（RLS）・デモデータ・ログイン/デモ体験 | ✅ |
 | Phase 2 コア | ダッシュボード・配送案件・配車ボード・ドライバー画面・連携 | ✅ |
 | Phase 3 管理 | ドライバー・車両・荷主（請求・未請求）・売上/利益分析・経費 | ✅ |
-| Phase 4 付加価値 | 地図・通知・CSV入出力 | ⏳ |
+| Phase 4 付加価値 | 配送マップ・通知（遅延・キャンセル・メモ）・CSV入出力・同時編集とオフライン対策 | ✅ |
 | Phase 5 仕上げ | レスポンシブ・性能・E2E・デプロイ | ⏳ |
 
 ## 技術スタック
@@ -46,10 +46,16 @@ npm run dev                     # http://localhost:3000
 ## テスト
 
 ```bash
-npm test           # 単体テスト＋DBテスト（権限分離・ステータス遷移・画面間の数字の一致・マスタの保存ルール・請求のルール・データ整合性）
+npm test           # 単体テスト＋DBテスト（権限分離・ステータス遷移・画面間の数字の一致・マスタの保存ルール・請求のルール・CSV入出力・通知・データ整合性）
 npm run typecheck
 npm run lint
 ```
+
+## 地図について
+
+- 地図は [Leaflet](https://leafletjs.com/)（BSD-2-Clause）と [OpenStreetMap](https://www.openstreetmap.org/copyright) のタイルを使います（API キー・契約は不要）
+- マーカーの位置は住所から求めた**架空の位置**です（GPS ではありません）。画面にも「デモ表示」と明記しています
+- OpenStreetMap の公開タイルは[利用方針](https://operations.osmfoundation.org/policies/tiles/)があり、アクセスの多い本番運用には向きません。本番で使う場合は `NEXT_PUBLIC_MAP_TILE_URL` に契約したタイル配信サービスの URL を設定してください
 
 ## デモ環境の仕組み
 

@@ -1,10 +1,12 @@
 import { ClipboardList } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/common/empty-state";
+import { DriverDayMap } from "@/components/driver/driver-day-map";
 import { DriverOrderCardLink } from "@/components/driver/order-card";
 import { asDriver } from "@/lib/auth";
 import { todayJst } from "@/lib/date";
 import { getDriverDay, getDriverUpcoming } from "@/lib/data/driver";
+import { getMapOrders } from "@/lib/data/map";
 import { ACTIVE_STATUSES } from "@/lib/domain/status";
 import { formatDateLong } from "@/lib/format";
 
@@ -12,9 +14,11 @@ export const metadata = { title: "本日の配送" };
 
 export default async function DriverOrdersPage() {
   const today = todayJst();
-  const { orders, upcoming } = await asDriver(async (tx) => {
-    const [orders, upcoming] = await Promise.all([getDriverDay(tx, today), getDriverUpcoming(tx, today, 10)]);
-    return { orders, upcoming };
+  const { orders, upcoming, mapOrders } = await asDriver(async (tx, user) => {
+    const [orders, upcoming, mapOrders] = await Promise.all([
+      getDriverDay(tx, today), getDriverUpcoming(tx, today, 10), getMapOrders(tx, today, user.driverId),
+    ]);
+    return { orders, upcoming, mapOrders };
   });
   const active = orders.filter((o) => ACTIVE_STATUSES.includes(o.status));
   const finished = orders.filter((o) => !ACTIVE_STATUSES.includes(o.status));
@@ -25,6 +29,8 @@ export default async function DriverOrdersPage() {
         <h1 className="text-xl font-bold">本日の配送</h1>
         <p className="text-sm text-muted-foreground tabular">{formatDateLong(today)}・{orders.length}件（残り {active.length}件）</p>
       </div>
+
+      <DriverDayMap orders={mapOrders} day={today} />
 
       {orders.length === 0 ? (
         <Card>

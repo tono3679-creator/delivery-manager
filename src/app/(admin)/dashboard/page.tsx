@@ -11,10 +11,12 @@ import { LateBadge, StatusBadge } from "@/components/common/status-badge";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { AlertsCard } from "@/components/dashboard/alerts-card";
 import { HorizontalBars, SalesTrendChart, StatusDonut } from "@/components/dashboard/charts";
+import { MapPanel } from "@/components/map/map-panel";
 import { asAdmin } from "@/lib/auth";
 import {
   getClientRanking, getDashboardAlerts, getDashboardKpis, getDashboardSeries, getDriverPerformance, getTodayOrders,
 } from "@/lib/data/dashboard";
+import { getMapOrders } from "@/lib/data/map";
 import { startOfMonth, todayJst } from "@/lib/date";
 import { formatNumber, formatPercent, formatTime, formatYen, formatYenCompact } from "@/lib/format";
 
@@ -23,16 +25,17 @@ export const metadata = { title: "ダッシュボード" };
 export default async function DashboardPage() {
   const today = todayJst();
   const monthStart = startOfMonth(today);
-  const { kpis, series, drivers, clients, orders, alerts } = await asAdmin(async (tx) => {
-    const [kpis, series, drivers, clients, orders, alerts] = await Promise.all([
+  const { kpis, series, drivers, clients, orders, alerts, mapOrders } = await asAdmin(async (tx) => {
+    const [kpis, series, drivers, clients, orders, alerts, mapOrders] = await Promise.all([
       getDashboardKpis(tx, today),
       getDashboardSeries(tx, today),
       getDriverPerformance(tx, monthStart, today),
       getClientRanking(tx, monthStart, today),
       getTodayOrders(tx, today, 8),
       getDashboardAlerts(tx, today),
+      getMapOrders(tx, today),
     ]);
-    return { kpis, series, drivers, clients, orders, alerts };
+    return { kpis, series, drivers, clients, orders, alerts, mapOrders };
   });
 
   return (
@@ -72,12 +75,15 @@ export default async function DashboardPage() {
       </section>
 
       <div className="grid gap-5 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
+        <Card className="min-w-0 lg:col-span-2">
           <CardHeader>
-            <CardTitle>売上推移</CardTitle>
+            <CardTitle>本日の配送マップ</CardTitle>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/dispatch?view=map">配車管理で開く <ArrowRight aria-hidden /></Link>
+            </Button>
           </CardHeader>
           <CardContent>
-            <SalesTrendChart data={series} />
+            <MapPanel orders={mapOrders} fitKey={today} mapClassName="h-72 sm:h-80" label="本日の配送先の地図" />
           </CardContent>
         </Card>
         <AlertsCard alerts={alerts} />
@@ -140,6 +146,15 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>売上推移</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SalesTrendChart data={series} />
+        </CardContent>
+      </Card>
 
       <div className="grid gap-5 lg:grid-cols-2">
         <Card>

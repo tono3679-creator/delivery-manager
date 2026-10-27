@@ -27,7 +27,7 @@ const NONE = "__none";
  * invoiceNo … 請求済みの案件の請求番号。荷主と料金も変えられない
  */
 export function OrderFormDialog({
-  open, onOpenChange, options, initial, orderId, orderNo, lock, invoiceNo,
+  open, onOpenChange, options, initial, orderId, orderNo, lock, invoiceNo, version,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -37,6 +37,8 @@ export function OrderFormDialog({
   orderNo?: string;
   lock?: "driver" | "schedule";
   invoiceNo?: string;
+  /** 編集を開いたときの案件の更新の印（保存のときに、その後の更新が無いかを確かめる） */
+  version?: string;
 }) {
   const lockBilling = Boolean(invoiceNo);
   const lockDriver = lock === "driver" || lock === "schedule";
@@ -44,6 +46,9 @@ export function OrderFormDialog({
   const router = useRouter();
   const [conflicts, setConflicts] = useState<Conflict[] | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // 開いた時点の印を保つ（開いている間に画面が更新されても、比べる相手は変えない）
+  const [baseVersion] = useState(version);
+  const [stale, setStale] = useState<string | null>(null);
   const form = useForm<OrderFormInput, unknown, OrderFormValues>({
     resolver: zodResolver(orderFormSchema),
     defaultValues: initial,
@@ -53,7 +58,7 @@ export function OrderFormDialog({
   const submit = async (values: OrderFormInput, confirmOverlap = false) => {
     setSubmitting(true);
     try {
-      const result = await saveOrder(values, { id: orderId, confirmOverlap });
+      const result = await saveOrder(values, { id: orderId, confirmOverlap, version: baseVersion });
       if (result.ok) {
         toast.success(orderId ? `${result.orderNo} を更新しました` : `${result.orderNo} を登録しました`, {
           action: orderId ? undefined : { label: "詳細を見る", onClick: () => router.push(`/orders/${result.id}`) },
@@ -64,6 +69,10 @@ export function OrderFormDialog({
         router.refresh();
       } else if ("needsConfirm" in result) {
         setConflicts(result.conflicts);
+      } else if (result.stale) {
+        // ダイアログの中に出す（開いている間はダイアログの外を押せないため、トーストのボタンは使えない）
+        setConflicts(null);
+        setStale(result.error);
       } else {
         if (result.fieldErrors) {
           for (const [k, msg] of Object.entries(result.fieldErrors)) setError(k as keyof OrderFormInput, { message: msg });
@@ -194,9 +203,28 @@ export function OrderFormDialog({
                 <Textarea id="notes" rows={2} placeholder="例：午前中必着、要事前連絡" {...register("notes")} />
               </Field>
             </div>
+            {stale && (
+              <div role="alert" className="flex flex-col gap-2 rounded-lg bg-warning-soft p-3 text-sm text-warning-strong sm:flex-row sm:items-center">
+                <TriangleAlert className="hidden size-5 shrink-0 sm:block" aria-hidden />
+                <p className="flex-1">{stale}（入力した内容は保存していません）</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => {
+                    onOpenChange(false);
+                    router.refresh();
+                    toast.info("最新の内容を読み込みました。もう一度「編集」から変更してください");
+                  }}
+                >
+                  最新の内容を読み込む
+                </Button>
+              </div>
+            )}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>キャンセル</Button>
-              <Button type="submit" disabled={submitting}>
+              <Button type="submit" disabled={submitting || stale !== null}>
                 {submitting && <Loader2 className="animate-spin" aria-hidden />}
                 {orderId ? "更新する" : "登録する"}
               </Button>

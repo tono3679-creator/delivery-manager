@@ -8,12 +8,16 @@ import { PageHeader } from "@/components/common/page-header";
 import { Pagination } from "@/components/common/pagination";
 import { SortLink } from "@/components/common/sort-link";
 import { LateBadge, StatusBadge } from "@/components/common/status-badge";
+import { ExportOrdersButton } from "@/components/orders/export-orders-button";
+import { ImportOrdersButton } from "@/components/orders/import-orders-dialog";
 import { NewOrderButton } from "@/components/orders/new-order-button";
 import { OrderFilters } from "@/components/orders/order-filters";
 import { OrderRowActions } from "@/components/orders/order-row-actions";
 import { asAdmin } from "@/lib/auth";
 import { addDays, todayJst } from "@/lib/date";
-import { getFormOptions, listOrders, PAGE_SIZE, parseOrderFilters, type OrderFilters as Filters, type OrderSort } from "@/lib/data/orders";
+import {
+  getFormOptions, listOrders, ORDER_EXPORT_LIMIT, PAGE_SIZE, parseOrderFilters, type OrderFilters as Filters, type OrderSort,
+} from "@/lib/data/orders";
 import { formatDateShort, formatNumber, formatTime, formatYen } from "@/lib/format";
 import { withParams } from "@/lib/url";
 
@@ -46,7 +50,17 @@ export default async function OrdersPage({ searchParams }: { searchParams: Searc
       <PageHeader
         title="配送案件"
         description="案件の検索・登録・編集ができます。ドライバーを選んで登録すると、すぐにドライバー画面へ届きます。"
-        actions={<NewOrderButton options={options} defaultDay={addDays(today, 1)} />}
+        actions={
+          <>
+            <ExportOrdersButton
+              href={withParams("/api/orders/export", current, { page: undefined, sort: undefined, dir: undefined })}
+              total={list.total}
+              limit={ORDER_EXPORT_LIMIT}
+            />
+            <ImportOrdersButton />
+            <NewOrderButton options={options} defaultDay={addDays(today, 1)} />
+          </>
+        }
       />
 
       <Card>

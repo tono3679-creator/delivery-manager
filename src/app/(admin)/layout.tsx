@@ -1,7 +1,8 @@
 import { AdminSidebar } from "@/components/layout/admin-sidebar";
 import { AdminHeader } from "@/components/layout/admin-header";
 import { DemoBanner } from "@/components/layout/demo-banner";
-import { RealtimeRefresher } from "@/components/realtime/realtime-refresher";
+import { LateAlertSync } from "@/components/realtime/late-alert-sync";
+import { OfflineBanner, RealtimeRefresher } from "@/components/realtime/realtime-refresher";
 import { requireAdmin } from "@/lib/auth";
 import { asUser } from "@/lib/db";
 import { getNotifications } from "@/lib/data/notifications";
@@ -11,7 +12,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const user = await requireAdmin();
   const notifications = await asUser(user.userId, (tx) => getNotifications(tx, "admin", null));
   return (
-    <RealtimeRefresher filter={{ column: "company_id", value: user.companyId }}>
+    <RealtimeRefresher filter={{ column: "company_id", value: user.companyId }} syncedAt={new Date().toISOString()}>
+      <LateAlertSync />
       <div className="min-h-dvh">
         <AdminSidebar companyName={user.companyName} />
         <div className="flex min-h-dvh flex-col lg:pl-60">
@@ -24,6 +26,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             notifications={notifications.items}
             unreadCount={notifications.unread}
           />
+          <OfflineBanner className="sm:px-6" />
           <main className="mx-auto w-full max-w-[1600px] flex-1 px-4 py-5 sm:px-6 sm:py-6">{children}</main>
         </div>
       </div>

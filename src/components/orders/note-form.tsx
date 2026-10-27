@@ -20,8 +20,16 @@ export function NoteForm({ orderId, action, placeholder = "例：守衛室で受
         e.preventDefault();
         if (!body.trim()) return;
         setPending(true);
-        const result = await action({ orderId, body });
-        setPending(false);
+        let result: Awaited<ReturnType<NoteAction>>;
+        try {
+          result = await action({ orderId, body });
+        } catch {
+          // 送れなかったときは入力を残し、もう一度送れるようにする
+          toast.error("通信できませんでした。入力内容は残っています。通信が戻ってからもう一度送ってください");
+          return;
+        } finally {
+          setPending(false);
+        }
         if (!result.ok) {
           toast.error(result.error);
           return;

@@ -51,12 +51,20 @@ export async function signOut(): Promise<void> {
 }
 
 /** デモ環境のみ：管理者⇔ドライバーの切り替え（DB 側でデモ会社かを確認する） */
-export async function switchDemoRole(role: "admin" | "driver"): Promise<void> {
+/**
+ * デモ環境での管理者⇔ドライバーの切り替え。
+ * driverId を指定すると、そのドライバーとして体験できる（案件詳細の「ドライバー画面で確認」から使う）。
+ */
+export async function switchDemoRole(role: "admin" | "driver", driverId?: string, next?: string): Promise<void> {
   const user = await getCurrentUser();
   if (!user?.isDemo) redirect("/login");
-  await asUser(user.userId, (tx) => tx`select demo_switch_role(${role}::app_role)`);
+  const parsedRole = z.enum(["admin", "driver"]).parse(role);
+  const parsedDriver = driverId === undefined ? null : z.uuid().parse(driverId);
+  await asUser(user.userId, (tx) => tx`select demo_switch_role(${parsedRole}::app_role, ${parsedDriver})`);
   revalidatePath("/", "layout");
-  redirect(role === "admin" ? "/dashboard" : "/driver");
+  // 移動先は自分のアプリ内のパスに限る（外部サイトへの転送を防ぐ）
+  const safeNext = next && /^\/(driver|orders|dispatch|dashboard)(\/[\w-]*)*$/.test(next) ? next : null;
+  redirect(safeNext ?? (parsedRole === "admin" ? "/dashboard" : "/driver"));
 }
 
 export async function resetDemo(): Promise<void> {

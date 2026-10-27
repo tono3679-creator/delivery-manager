@@ -20,6 +20,10 @@ export function RealtimeRefresher({
   const router = useRouter();
   const [status, setStatus] = useState<Status>(realtimeEnabled ? "connecting" : "polling");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const statusRef = useRef<Status>(status);
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
 
   useEffect(() => {
     const refresh = () => {
@@ -57,7 +61,7 @@ export function RealtimeRefresher({
     }
 
     const poll = setInterval(() => {
-      if (document.visibilityState === "visible" && (!realtimeEnabled || status === "offline")) router.refresh();
+      if (document.visibilityState === "visible" && (!realtimeEnabled || statusRef.current === "offline")) router.refresh();
     }, 30_000);
 
     return () => {
@@ -67,8 +71,6 @@ export function RealtimeRefresher({
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("online", refresh);
     };
-    // status は購読の作り直しには使わない
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter.column, filter.value, router]);
 
   return <StatusContext value={status}>{children}</StatusContext>;

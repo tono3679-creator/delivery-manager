@@ -133,6 +133,8 @@ function demandFactor(day: DateString, startDay: DateString): number {
 }
 
 /** 集荷時刻の候補（分）。朝と昼過ぎに山がある */
+/** 配送予定の最も遅い時刻（分）。これより遅くなる後ろ倒しはしない */
+const LAST_DELIVERY_MINUTE = 20 * 60;
 const PICKUP_SLOTS: { minute: number; weight: number }[] = [];
 for (let m = 8 * 60; m <= 16 * 60; m += 15) {
   const h = m / 60;
@@ -333,16 +335,25 @@ export function generateDemoData(options: GenerateOptions): DemoDataset {
     // 集荷時刻順にドライバーへ割り当て（空いている人を優先）
     dayOrders.sort((a, b) => a.pickupAt.getTime() - b.pickupAt.getTime());
     for (const order of dayOrders) {
-      const start = (order.pickupAt.getTime() - jstDateTime(day).getTime()) / 60_000;
-      const end = (order.deliveryAt.getTime() - jstDateTime(day).getTime()) / 60_000;
+      let start = (order.pickupAt.getTime() - jstDateTime(day).getTime()) / 60_000;
+      let end = (order.deliveryAt.getTime() - jstDateTime(day).getTime()) / 60_000;
       const free = working.filter((i) => (schedules.get(i)?.end ?? 0) <= start - 10);
       let chosen: number | null;
       if (free.length > 0) {
         chosen = rnd.weighted(free, (i) => DRIVERS[i].capacity ** 3 / (1 + (schedules.get(i)?.orders.length ?? 0) * 0.15));
       } else {
-        // 全員が埋まっている場合は、一番早く空く人に詰める（予定の重複が発生する）
+        // 全員が埋まっている場合は、一番早く空く人の次の空き時間へ後ろ倒しする（荷主と時間を調整した想定）。
+        // その日のうちに収まらないときだけ、そのまま詰める（予定の重複になる）
         chosen = working.reduce((best, i) =>
           (schedules.get(i)?.end ?? 0) < (schedules.get(best)?.end ?? 0) ? i : best, working[0]);
+        const nextStart = Math.ceil(((schedules.get(chosen)?.end ?? 0) + 10) / 15) * 15;
+        if (nextStart + (end - start) <= LAST_DELIVERY_MINUTE) {
+          const shift = nextStart - start;
+          order.pickupAt = addMinutes(order.pickupAt, shift);
+          order.deliveryAt = addMinutes(order.deliveryAt, shift);
+          start += shift;
+          end += shift;
+        }
       }
       const schedule = schedules.get(chosen);
       if (schedule) {

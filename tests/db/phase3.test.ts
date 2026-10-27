@@ -113,6 +113,20 @@ describe("画面間で数字が一致する（今月1日〜本日）", () => {
     expect([last.from, last.to]).toEqual(["2026-09-01", "2026-09-30"]);
   });
 
+  it("比較する期間の途中から記録が始まっている場合は、増減を比べない", async () => {
+    await asAdminA(async (tx) => {
+      // デモデータは約6か月分。直近3か月の比較（その前の3か月）は記録の範囲内
+      const three = await getAnalytics(tx, resolvePeriod({ period: "last_3_months" }, today));
+      expect(three.previous.complete).toBe(true);
+      expect(three.previous.revenue).toBeGreaterThan(0);
+      // 直近6か月の比較（その前の6か月）は記録の開始より前を含む
+      const six = await getAnalytics(tx, resolvePeriod({ period: "last_6_months" }, today));
+      expect(six.previous.complete).toBe(false);
+      expect(six.previous.recordStart! > six.previous.from).toBe(true);
+      expect(six.previous.recordStart! <= addMonths(today, -5)).toBe(true);
+    });
+  });
+
   it("車両詳細の経費合計は、その車両に紐づく経費の合計と一致する", async () => {
     const vehicleId = a.data.vehicles[0].id as string;
     const from6 = startOfMonth(addMonths(today, -5));

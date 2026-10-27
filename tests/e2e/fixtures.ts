@@ -1,4 +1,5 @@
-import { test as base, expect, type Locator, type Page } from "@playwright/test";
+import { test as base, expect, type BrowserContext, type Locator, type Page } from "@playwright/test";
+import postgres, { type Sql } from "postgres";
 
 /** 地図タイルの代わりに返す 1px の灰色 PNG（外部の地図サーバーに依存しない） */
 const GRAY_PNG = Buffer.from(
@@ -15,7 +16,24 @@ type Fixtures = {
   pageErrors: string[];
 };
 
-export const test = base.extend<Fixtures>({
+type WorkerFixtures = {
+  /** テストで作ったデモ会社を片付けるための DB 接続（ワーカーごとに1本） */
+  db: Sql;
+};
+
+export const test = base.extend<Fixtures, WorkerFixtures>({
+  db: [
+    async ({}, provide) => {
+      const sql = postgres(process.env.DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/dm", {
+        max: 1,
+        prepare: false,
+        onnotice: () => {},
+      });
+      await provide(sql);
+      await sql.end();
+    },
+    { scope: "worker" },
+  ],
   context: async ({ context }, provide) => {
     await context.route(/tile\.openstreetmap\.org/, (route) => route.fulfill({ body: GRAY_PNG, contentType: "image/png" }));
     await provide(context);
@@ -32,15 +50,41 @@ export const test = base.extend<Fixtures>({
     },
     { auto: true },
   ],
-  adminPage: async ({ page }, provide) => {
+  adminPage: async ({ page, db }, provide) => {
     await startDemo(page, "admin");
     await provide(page);
+    await removeDemo(db, page.context());
   },
-  driverPage: async ({ page }, provide) => {
+  driverPage: async ({ page, db }, provide) => {
     await startDemo(page, "driver");
     await provide(page);
+    await removeDemo(db, page.context());
   },
 });
+
+/**
+ * テストで作ったデモ会社と一時ユーザーを削除する（期限切れのデモの削除と同じ）。
+ * テストで登録した案件が DB に残ると、デモデータの整合性チェック（npm run db:verify・DB テスト）の対象になるため。
+ */
+async function removeDemo(db: Sql, context: BrowserContext) {
+  const userId = await currentUserId(context);
+  if (!userId) return;
+  await db`delete from companies where is_demo and demo_owner = ${userId}`;
+  await db`delete from auth.users where id = ${userId} and is_anonymous`;
+}
+
+/** ログイン中のユーザー ID（Supabase の認証 Cookie のアクセストークンから読む） */
+async function currentUserId(context: BrowserContext): Promise<string | null> {
+  const chunks = (await context.cookies())
+    .filter((c) => /^sb-.+-auth-token(\.\d+)?$/.test(c.name))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  if (chunks.length === 0) return null;
+  const raw = chunks.map((c) => c.value).join("");
+  const json = raw.startsWith("base64-") ? Buffer.from(raw.slice(7), "base64url").toString("utf8") : decodeURIComponent(raw);
+  const token = (JSON.parse(json) as { access_token?: string }).access_token;
+  if (!token) return null;
+  return (JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8")) as { sub?: string }).sub ?? null;
+}
 
 export { expect };
 
@@ -48,7 +92,15 @@ export { expect };
 export async function startDemo(page: Page, role: "admin" | "driver") {
   await page.goto("/login");
   await page.getByRole("button", { name: role === "admin" ? /管理者として体験/ : /ドライバーとして体験/ }).click();
-  await page.waitForURL(role === "admin" ? /\/dashboard$/ : /\/driver$/, { timeout: 60_000 });
+  const ready = role === "admin" ? /\/dashboard$/ : /\/driver$/;
+  // 作成に失敗したとき（デモ数の上限など）はエラーのトーストが出るので、その文言で失敗させる
+  const failed = page.locator('[data-sonner-toast][data-type="error"]');
+  const result = await Promise.race([
+    page.waitForURL(ready, { timeout: 60_000 }).then(() => "ok", () => "timeout"),
+    failed.waitFor({ timeout: 60_000 }).then(() => "error", () => "timeout"),
+  ]);
+  if (result === "error") throw new Error(`デモを開始できませんでした：${await failed.first().innerText()}`);
+  if (!ready.test(page.url())) throw new Error(`デモを開始できませんでした（${page.url()}）`);
 }
 
 /** 日本時間の日付（YYYY-MM-DD）。days で前後にずらす */

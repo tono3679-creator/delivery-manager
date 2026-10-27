@@ -1,36 +1,59 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Delivery Manager
 
-## Getting Started
+**配送業務のすべてを、ひとつの画面で。**
 
-First, run the development server:
+従業員5〜30名の配送会社向けの統合業務管理システムです。配送案件・配車・ドライバー・車両・荷主・売上分析を一元管理し、ドライバーはスマートフォンから配送ステータスを更新できます。
+
+> 営業用ポートフォリオとして開発中です。設計資料：[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+
+## 開発状況
+
+| フェーズ | 内容 | 状態 |
+| --- | --- | --- |
+| Phase 1 基盤 | レイアウト・DB設計（RLS）・デモデータ・ログイン/デモ体験 | ✅ |
+| Phase 2 コア | ダッシュボード・配送案件・配車ボード・ドライバー画面・連携 | 🚧 |
+| Phase 3 管理 | ドライバー・車両・荷主・売上/利益分析 | ⏳ |
+| Phase 4 付加価値 | 地図・通知・CSV入出力 | ⏳ |
+| Phase 5 仕上げ | レスポンシブ・性能・E2E・デプロイ | ⏳ |
+
+## 技術スタック
+
+Next.js 16（App Router）/ React 19 / TypeScript / Tailwind CSS 4 / shadcn/ui / Supabase（PostgreSQL・Auth・Realtime）/ postgres.js / Recharts / Leaflet / React Hook Form + Zod / Vitest / Playwright
+
+## ローカルで動かす（Supabase なし）
+
+PostgreSQL 16 と Node.js 22 があれば動きます。認証は Supabase Auth の代わりに同梱の簡易認証サーバーを使います。
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env.local      # 「ローカル開発」の行を有効にする
+npm run db:local:reset          # DB作成 → Supabase互換のロール等 → マイグレーション
+npm run db:seed                 # デモデータ（Seed値で再現可能）
+npm run db:verify               # データ整合性チェック
+npm run dev:auth &              # 簡易認証サーバー（:54321）
+npm run dev                     # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+ログイン画面の「管理者として体験」「ドライバーとして体験」から操作できます。Seed で作るアカウント：`admin@minato-express.example` / `demo-admin-2026`、`driver@minato-express.example` / `demo-driver-2026`。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Supabase で動かす
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Supabase のプロジェクトを作成し、Authentication → Sign In / Providers で **Anonymous sign-ins** を有効にする
+2. `supabase link` → `supabase db push` でマイグレーションを適用
+3. `.env.local` に URL・公開キー・`DATABASE_URL`（接続プーラー）を設定
+4. `npm run db:seed`
 
-## Learn More
+## テスト
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm test           # 単体テスト＋DBテスト（権限分離・ステータス遷移・集計の一致・データ整合性）
+npm run typecheck
+npm run lint
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## デモ環境の仕組み
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- 「体験」ボタンを押すと匿名ログインし、**訪問者ごとに専用の配送会社**（案件 約6,000件）をその場で生成します。他の閲覧者の操作は見えません
+- データは「今」を基準に作るので、いつ開いても稼働中の配送会社に見えます
+- 24時間後に自動削除（Vercel Cron → `/api/cron/demo-cleanup`）
+- デモ会社でのみ、管理者⇔ドライバーの画面を切り替えられます（切り替え後は DB の権限もドライバーになります）

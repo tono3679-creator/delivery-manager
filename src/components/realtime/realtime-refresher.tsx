@@ -1,0 +1,101 @@
+"use client";
+/**
+ * 配送案件・通知の変更を受け取って画面を最新にする。
+ * - Supabase Realtime で変更を購読（RLS により自分が見られる行の変更だけが届く）
+ * - 切断・再接続・画面復帰のときは必ず再取得する（表示は常に DB の内容が正）
+ * - Realtime が使えない環境では 30 秒ごとに再取得する
+ */
+import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { realtimeEnabled } from "@/lib/supabase/config";
+import { cn } from "@/lib/utils";
+
+type Status = "connecting" | "live" | "offline" | "polling";
+const StatusContext = createContext<Status>("connecting");
+
+export function RealtimeRefresher({
+  filter, children,
+}: { filter: { column: "company_id" | "driver_id"; value: string }; children: React.ReactNode }) {
+  const router = useRouter();
+  const [status, setStatus] = useState<Status>(realtimeEnabled ? "connecting" : "polling");
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const refresh = () => {
+      if (timer.current) clearTimeout(timer.current);
+      // 連続した変更はまとめて1回だけ再取得する
+      timer.current = setTimeout(() => router.refresh(), 400);
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", refresh);
+
+    let cleanup = () => {};
+    if (realtimeEnabled) {
+      const supabase = getSupabaseBrowserClient();
+      const channel = supabase
+        .channel(`orders:${filter.column}:${filter.value}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "delivery_orders", filter: `${filter.column}=eq.${filter.value}` }, refresh)
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `${filter.column}=eq.${filter.value}` }, refresh)
+        .subscribe((state) => {
+          if (state === "SUBSCRIBED") {
+            setStatus((prev) => {
+              // 再接続できたら、切断中に起きた変更を取りこぼさないよう再取得
+              if (prev === "offline") refresh();
+              return "live";
+            });
+          } else if (state === "CHANNEL_ERROR" || state === "TIMED_OUT" || state === "CLOSED") {
+            setStatus("offline");
+          }
+        });
+      cleanup = () => {
+        supabase.removeChannel(channel);
+      };
+    }
+
+    const poll = setInterval(() => {
+      if (document.visibilityState === "visible" && (!realtimeEnabled || status === "offline")) router.refresh();
+    }, 30_000);
+
+    return () => {
+      cleanup();
+      clearInterval(poll);
+      if (timer.current) clearTimeout(timer.current);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", refresh);
+    };
+    // status は購読の作り直しには使わない
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter.column, filter.value, router]);
+
+  return <StatusContext value={status}>{children}</StatusContext>;
+}
+
+const LABEL: Record<Status, string> = {
+  connecting: "接続中…",
+  live: "リアルタイム更新中",
+  offline: "再接続中（自動で再取得します）",
+  polling: "自動更新（30秒ごと）",
+};
+
+export function RealtimeIndicator({ className }: { className?: string }) {
+  const status = useContext(StatusContext);
+  return (
+    <div className={cn("items-center gap-1.5 text-xs text-muted-foreground", className)} aria-live="polite">
+      <span
+        className={cn(
+          "size-2 rounded-full",
+          status === "live" && "bg-success",
+          status === "polling" && "bg-brand",
+          status === "connecting" && "animate-pulse bg-muted-foreground",
+          status === "offline" && "animate-pulse bg-warning",
+        )}
+        aria-hidden
+      />
+      {LABEL[status]}
+    </div>
+  );
+}

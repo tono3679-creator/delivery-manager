@@ -8,12 +8,14 @@ import {
   AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { deleteClient, deleteDriver, deleteVehicle } from "@/lib/actions/masters";
+import { deleteOffice } from "@/lib/actions/settings";
 
-const ACTIONS = { driver: deleteDriver, vehicle: deleteVehicle, client: deleteClient } as const;
+const ACTIONS = { driver: deleteDriver, vehicle: deleteVehicle, client: deleteClient, office: deleteOffice } as const;
 const NOTE = {
   driver: "配送実績のあるドライバーは削除できません。辞めた方は「退職」にすると、履歴を残したまま配車の候補から外れます。",
   vehicle: "案件や経費の記録がある車両は削除できません。使わなくなった車両は「廃車」にしてください。",
   client: "案件がある荷主は、売上の履歴を残すため削除できません。",
+  office: "所属しているドライバーがいる営業所は削除できません。",
 } as const;
 
 /** マスタの削除。実績がある場合はサーバーが拒否し、その理由を表示する */
@@ -25,8 +27,15 @@ export function DeleteMasterButton({
   const [pending, setPending] = useState(false);
   const onDelete = async () => {
     setPending(true);
-    const result = await ACTIONS[kind](id);
-    setPending(false);
+    let result: Awaited<ReturnType<(typeof ACTIONS)[typeof kind]>>;
+    try {
+      result = await ACTIONS[kind](id);
+    } catch {
+      toast.error("通信できませんでした。接続を確認してから、もう一度お試しください");
+      return;
+    } finally {
+      setPending(false);
+    }
     if (!result.ok) {
       toast.error(result.error);
       setOpen(false);
@@ -35,6 +44,7 @@ export function DeleteMasterButton({
     toast.success(`${name} を削除しました`);
     setOpen(false);
     router.push(redirectTo);
+    router.refresh();
   };
   return (
     <>

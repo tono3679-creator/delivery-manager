@@ -37,6 +37,7 @@ export async function loadDataset(sql: Sql, data: DemoDataset, extra?: (tx: Tran
     await insertRows(tx, "delivery_notes", data.notes);
     await insertRows(tx, "expenses", data.expenses);
     await insertRows(tx, "notifications", data.notifications);
+    await insertRows(tx, "audit_logs", data.auditLogs);
     if (extra) await extra(tx);
     await tx`select set_config('app.bulk_load', 'off', true)`;
   });

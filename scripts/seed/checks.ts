@@ -106,6 +106,15 @@ export const INTEGRITY_CHECKS: { label: string; sql: string }[] = [
              or (nt.audience = 'driver' and nt.driver_id is null)`,
   },
   {
+    label: "操作履歴の案件・請求は同じ会社のもので、記録の案件番号・請求番号と一致する",
+    sql: `select count(*) n from audit_logs l
+          left join delivery_orders o on l.entity = 'delivery_order' and o.id = l.entity_id
+          left join client_invoices i on l.entity = 'client_invoice' and i.id = l.entity_id
+          where l.created_at > now()
+             or (o.id is not null and (o.company_id <> l.company_id or o.order_no is distinct from l.detail ->> 'orderNo'))
+             or (i.id is not null and (i.company_id <> l.company_id or i.invoice_no is distinct from l.detail ->> 'invoiceNo'))`,
+  },
+  {
     label: "現在の車両担当は1台につき1名",
     sql: `select count(*) n from (select vehicle_id from vehicle_assignments where end_on is null
           group by vehicle_id having count(*) > 1) t`,

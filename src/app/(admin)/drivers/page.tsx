@@ -42,6 +42,7 @@ export default async function DriversPage({ searchParams }: { searchParams: Sear
           selects={[
             { key: "status", label: "ステータス", allLabel: "すべてのステータス", options: DRIVER_STATUSES.map((s) => ({ value: s, label: DRIVER_STATUS_LABEL[s] })) },
             { key: "employment", label: "雇用形態", allLabel: "すべての雇用形態", options: EMPLOYMENT_TYPES.map((t) => ({ value: t, label: EMPLOYMENT_TYPE_LABEL[t] })) },
+            { key: "office", label: "営業所", allLabel: "すべての営業所", options: offices.map((o) => ({ value: o.id, label: o.name })) },
           ]}
         />
         <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b bg-muted/40 px-4 py-2.5 text-sm sm:px-5">

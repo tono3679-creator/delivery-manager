@@ -10,6 +10,7 @@ const filterSchema = z.object({
   q: z.string().trim().max(50).optional().catch(undefined),
   status: z.enum(DRIVER_STATUSES).optional().catch(undefined),
   employment: z.enum(EMPLOYMENT_TYPES).optional().catch(undefined),
+  office: z.uuid().optional().catch(undefined),
 });
 export type DriverFilters = z.infer<typeof filterSchema>;
 
@@ -54,6 +55,7 @@ export async function listDrivers(tx: Tx, f: DriverFilters, today: DateString): 
        ${like ? tx`and (d.name || ' ' || coalesce(d.name_kana, '') || ' ' || d.code || ' ' || coalesce(d.phone, '')) ilike ${like}` : tx``}
        ${f.status ? tx`and d.status = ${f.status}` : tx``}
        ${f.employment ? tx`and d.employment_type = ${f.employment}` : tx``}
+       ${f.office ? tx`and d.office_id = ${f.office}` : tx``}
      order by case d.status when 'retired' then 1 else 0 end, d.code`;
   return rows.map((r) => ({
     id: r.id, code: r.code, name: r.name, nameKana: r.name_kana, phone: r.phone, employmentType: r.employment_type,

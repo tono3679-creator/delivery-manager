@@ -36,6 +36,8 @@ import { Random } from "./random";
 export const DEFAULT_DEMO_SEED = 20261027;
 /** 履歴を作る日数（売上・経費の6か月分） */
 export const HISTORY_DAYS = 183;
+/** 操作履歴を作る期間（日） */
+export const AUDIT_DAYS = 7;
 /** 先の予定を作る日数 */
 export const FUTURE_DAYS = 7;
 
@@ -49,7 +51,8 @@ export type GenerateOptions = {
   demoExpiresAt?: Date | null;
 };
 
-type Row = Record<string, string | number | boolean | Date | null>;
+/** jsonb 列（操作履歴の detail）はオブジェクトのまま渡す */
+type Row = Record<string, string | number | boolean | Date | null | { [key: string]: unknown }>;
 
 export type DemoDataset = {
   company: Row;
@@ -65,6 +68,8 @@ export type DemoDataset = {
   notes: Row[];
   expenses: Row[];
   notifications: Row[];
+  /** 操作履歴（直近の受注登録・配車・請求書の発行。ステータス履歴と同じ担当者・時刻） */
+  auditLogs: Row[];
   /** 管理者デモで最初に表示するドライバー（ロール切替用） */
   featuredDriverId: string;
 };
@@ -356,11 +361,10 @@ export function generateDemoData(options: GenerateOptions): DemoDataset {
     const driverSeed = order.driverIndex !== null ? DRIVERS[order.driverIndex] : null;
     const isFutureDay = order.day > today;
     const assignLead = rnd.int(30, 20 * 60);
-    order.assignedAt = minDate(
-      new Date(Math.max(order.createdAt.getTime() + 10 * 60_000, order.pickupAt.getTime() - assignLead * 60_000)),
-      now,
-    );
-    if (order.assignedAt <= order.createdAt) order.assignedAt = addMinutes(order.createdAt, 1);
+    const plannedAssign = new Date(Math.max(order.createdAt.getTime() + 10 * 60_000, order.pickupAt.getTime() - assignLead * 60_000));
+    // 予定どおりなら「これから」配車する案件は、直近数時間のうちに配車したことにする（現在時刻にそろえない）
+    order.assignedAt = plannedAssign > now ? addMinutes(now, -rnd.int(5, 240)) : plannedAssign;
+    if (order.assignedAt <= order.createdAt) order.assignedAt = minDate(addMinutes(order.createdAt, 1), now);
 
     // 先の日付：一部は未割当のまま
     if (isFutureDay) {
@@ -438,6 +442,16 @@ export function generateDemoData(options: GenerateOptions): DemoDataset {
   const statusLogs: Row[] = [];
   const notes: Row[] = [];
   const admin = () => rnd.pick(ADMIN_STAFF);
+  // 操作履歴：画面から操作したときと同じ形で記録する
+  const auditLogs: Row[] = [];
+  const auditFrom = new Date(now.getTime() - AUDIT_DAYS * 86_400_000);
+  const audit = (at: Date, actor: string, action: string, entity: string, entityId: string, detail: Record<string, unknown>) => {
+    if (at < auditFrom || at > now) return;
+    auditLogs.push({
+      id: ids.uuid(), company_id: companyId, actor_id: null, actor_name: actor,
+      action, entity, entity_id: entityId, detail, created_at: at,
+    });
+  };
   const log = (o: PlannedOrder, from: OrderStatus | null, to: OrderStatus, at: Date, by: string, note: string | null = null) => {
     statusLogs.push({
       id: ids.uuid(),
@@ -460,10 +474,17 @@ export function generateDemoData(options: GenerateOptions): DemoDataset {
     // 最終更新は最後の履歴の時刻
     let updatedAt = o.createdAt;
 
-    log(o, null, "unassigned", o.createdAt, admin());
+    const orderNo = o.row.order_no as string;
+    const createdBy = admin();
+    log(o, null, "unassigned", o.createdAt, createdBy);
+    audit(o.createdAt, createdBy, "create", "delivery_order", o.id, { orderNo, overlapConfirmed: false });
     const reachedAssigned = driver !== null || (o.status === "cancelled" && o.driverIndex !== null);
     if (reachedAssigned && o.assignedAt) {
-      log(o, "unassigned", "assigned", o.assignedAt, admin());
+      const assignedBy = admin();
+      log(o, "unassigned", "assigned", o.assignedAt, assignedBy);
+      audit(o.assignedAt, assignedBy, "dispatch", "delivery_order", o.id, {
+        orderNo, fromDriverId: null, toDriverId: driver?.id ?? null, timeChanged: false, overlapConfirmed: false,
+      });
       updatedAt = o.assignedAt;
     }
     if (o.status === "cancelled") {
@@ -695,6 +716,11 @@ export function generateDemoData(options: GenerateOptions): DemoDataset {
         created_at: issuedAt,
         updated_at: issuedAt,
       });
+      audit(issuedAt, "事務 森下", "issue", "client_invoice", id, {
+        invoiceNo: `INV-${g.month.slice(0, 4)}${g.month.slice(5, 7)}-${String(seq).padStart(3, "0")}`,
+        clientId: clients[g.clientIndex].id, month: g.month.slice(0, 7),
+        amount: g.orders.reduce((s, o) => s + o.fee, 0), orderCount: g.orders.length,
+      });
       for (const o of g.orders) {
         const row = orderRows.get(o.id);
         if (row) {
@@ -726,6 +752,7 @@ export function generateDemoData(options: GenerateOptions): DemoDataset {
     notes,
     expenses,
     notifications,
+    auditLogs: auditLogs.sort((a, b) => (a.created_at as Date).getTime() - (b.created_at as Date).getTime()),
     featuredDriverId: drivers[featured].id,
   };
 }

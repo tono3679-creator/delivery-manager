@@ -34,6 +34,20 @@ function diff(current: number | null, previous: number | null): number | null {
 
 const GRAIN_LABEL = { day: "日別", week: "週別", month: "月別" } as const;
 
+/** 売上の多い順の順位（同額は同順位、売上 0 円は順位なし） */
+function ranks(revenues: number[]): (number | null)[] {
+  return revenues.map((r) => (r <= 0 ? null : 1 + revenues.filter((x) => x > r).length));
+}
+
+function Rank({ value }: { value: number | null }) {
+  if (value === null) return <span className="text-muted-foreground">—</span>;
+  return (
+    <span className={value <= 3 ? "font-semibold text-foreground" : "text-muted-foreground"}>
+      {value}<span className="sr-only">位</span>
+    </span>
+  );
+}
+
 export default async function AnalyticsPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const today = todayJst();
@@ -49,6 +63,8 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Se
   const expenseTotal = data.breakdown.reduce((sum, b) => sum + b.amount, 0);
   const clientTotal = data.clients.reduce((sum, c) => sum + c.revenue, 0);
   const driverTotal = data.drivers.reduce((sum, d) => sum + d.revenue, 0);
+  const clientRanks = ranks(data.clients.map((c) => c.revenue));
+  const driverRanks = ranks(data.drivers.map((d) => d.revenue));
   const compare = `${p.label}（${formatDate(p.from)}〜${formatDate(p.to)}）`;
 
   return (
@@ -133,23 +149,25 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Se
 
         <Card>
           <CardHeader>
-            <CardTitle>荷主別の売上</CardTitle>
+            <CardTitle>荷主別の売上ランキング</CardTitle>
             <span className="text-xs text-muted-foreground">合計 {formatYen(clientTotal)}</span>
           </CardHeader>
           <CardContent className="px-0 pb-2">
-            <Table className="min-w-[520px]">
+            <Table className="min-w-[560px]">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="pl-5">荷主</TableHead>
+                  <TableHead className="w-12 pl-5 text-right">順位</TableHead>
+                  <TableHead>荷主</TableHead>
                   <TableHead className="text-right">件数</TableHead>
                   <TableHead className="text-right">売上</TableHead>
                   <TableHead className="pr-5 text-right">構成比</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.clients.map((c) => (
+                {data.clients.map((c, i) => (
                   <TableRow key={c.clientId}>
-                    <TableCell className="max-w-48 truncate pl-5">
+                    <TableCell className="pl-5 text-right tabular"><Rank value={clientRanks[i]} /></TableCell>
+                    <TableCell className="max-w-48 truncate">
                       <Link href={`/clients/${c.clientId}`} className="hover:underline">{c.name}</Link>
                     </TableCell>
                     <TableCell className="text-right tabular">{formatNumber(c.orders)}</TableCell>
@@ -165,15 +183,16 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Se
 
       <Card>
         <CardHeader>
-          <CardTitle>ドライバー別の実績</CardTitle>
+          <CardTitle>ドライバー別の売上ランキング</CardTitle>
           <span className="hidden text-xs text-muted-foreground sm:inline">売上の多い順・遅延は予定から15分超</span>
         </CardHeader>
         <CardContent className="px-0 pb-2">
           <div className="overflow-x-auto">
-            <Table className="min-w-[720px]">
+            <Table className="min-w-[760px]">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="pl-5">ドライバー</TableHead>
+                  <TableHead className="w-12 pl-5 text-right">順位</TableHead>
+                  <TableHead>ドライバー</TableHead>
                   <TableHead className="text-right">配送件数</TableHead>
                   <TableHead className="text-right">完了</TableHead>
                   <TableHead className="text-right">完了率</TableHead>
@@ -184,9 +203,10 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Se
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.drivers.map((d) => (
+                {data.drivers.map((d, i) => (
                   <TableRow key={d.driverId}>
-                    <TableCell className="pl-5 whitespace-nowrap"><Link href={`/drivers/${d.driverId}`} className="hover:underline">{d.name}</Link></TableCell>
+                    <TableCell className="pl-5 text-right tabular"><Rank value={driverRanks[i]} /></TableCell>
+                    <TableCell className="whitespace-nowrap"><Link href={`/drivers/${d.driverId}`} className="hover:underline">{d.name}</Link></TableCell>
                     <TableCell className="text-right tabular">{formatNumber(d.orders)}</TableCell>
                     <TableCell className="text-right tabular">{formatNumber(d.delivered)}</TableCell>
                     <TableCell className="text-right tabular">{formatPercent(d.completionRate)}</TableCell>

@@ -44,9 +44,21 @@ export async function saveOrder(input: OrderFormInput, options: { id?: string; c
       // 編集時は、担当か時刻が変わったときだけ重複を確認する（料金の修正などで毎回警告しない）
       let scheduleChanged = true;
       if (options.id) {
-        const [current] = await tx<{ status: string; driver_id: string | null; pickup_at: Date; delivery_at: Date }[]>`
-          select status, driver_id, pickup_at, delivery_at from delivery_orders where id = ${options.id} for update`;
+        const [current] = await tx<{
+          status: string; driver_id: string | null; pickup_at: Date; delivery_at: Date; client_id: string; fee: number; invoice_id: string | null;
+        }[]>`
+          select status, driver_id, pickup_at, delivery_at, client_id, fee, invoice_id from delivery_orders where id = ${options.id} for update`;
         if (!current) return { ok: false as const, error: "案件が見つかりません（削除された可能性があります）" };
+        // 請求済みの案件は請求金額の根拠（料金・荷主・配送日）を変えられない（DB のトリガーでも拒否する）
+        if (current.invoice_id) {
+          const fieldErrors: Record<string, string> = {};
+          if (current.fee !== v.fee) fieldErrors.fee = "請求済みのため変更できません";
+          if (current.client_id !== v.clientId) fieldErrors.clientId = "請求済みのため変更できません";
+          if (current.delivery_at.getTime() !== deliveryAt.getTime()) fieldErrors.deliveryAt = "請求済みのため変更できません";
+          if (Object.keys(fieldErrors).length > 0) {
+            return { ok: false as const, error: "請求済みの案件は料金・荷主・配送日を変更できません（請求を取り消してから変更してください）", fieldErrors };
+          }
+        }
         if (["picked_up", "in_transit"].includes(current.status) && current.driver_id !== v.driverId) {
           return { ok: false as const, error: "集荷後の案件はドライバーを変更できません", fieldErrors: { driverId: "集荷後は変更できません" } };
         }

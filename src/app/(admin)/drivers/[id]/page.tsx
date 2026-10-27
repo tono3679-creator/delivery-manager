@@ -10,6 +10,7 @@ import { AssignVehicleButton } from "@/components/masters/assign-vehicle-dialog"
 import { DeleteMasterButton } from "@/components/masters/delete-master-button";
 import { DriverFormButton } from "@/components/masters/driver-form";
 import { RecentOrders } from "@/components/masters/recent-orders";
+import { TodayOrders } from "@/components/masters/today-orders";
 import { asAdmin } from "@/lib/auth";
 import { todayJst } from "@/lib/date";
 import { getDriverDetail, getOffices, getVehicleChoices } from "@/lib/data/drivers";
@@ -32,6 +33,8 @@ export default async function DriverDetailPage({ params }: Props) {
   const month = Number(today.slice(5, 7));
   const sixMonthRevenue = driver.series.reduce((s, p) => s + p.revenue, 0);
   const retired = driver.status === "retired";
+  const todayActive = driver.today.filter((o) => o.status !== "cancelled");
+  const todayDone = todayActive.filter((o) => o.status === "delivered").length;
 
   return (
     <div className="space-y-5">
@@ -79,6 +82,23 @@ export default async function DriverDetailPage({ params }: Props) {
         <div className="min-w-0 space-y-5 lg:col-span-2">
           <Card>
             <CardHeader>
+              <CardTitle>本日の担当案件</CardTitle>
+              <div className="flex items-center gap-2">
+                {todayActive.length > 0 && (
+                  <span className="text-xs text-muted-foreground tabular">{formatNumber(todayActive.length, "件")}・完了 {formatNumber(todayDone, "件")}</span>
+                )}
+                <Button asChild variant="ghost" size="sm"><Link href="/dispatch">配車ボード</Link></Button>
+              </div>
+            </CardHeader>
+            <div className="pb-2">
+              <TodayOrders
+                rows={driver.today}
+                empty={driver.status === "active" ? "本日の担当案件はありません" : "休職中・退職済みのため本日の担当はありません"}
+              />
+            </div>
+          </Card>
+          <Card>
+            <CardHeader>
               <CardTitle>月別の売上（直近6か月）</CardTitle>
               <span className="text-xs text-muted-foreground tabular">合計 {formatYen(sixMonthRevenue)}</span>
             </CardHeader>
@@ -88,7 +108,7 @@ export default async function DriverDetailPage({ params }: Props) {
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>最近の担当案件</CardTitle>
+              <CardTitle>配送履歴（前日まで）</CardTitle>
               <Button asChild variant="ghost" size="sm"><Link href={`/orders?driver=${driver.id}`}>すべて見る</Link></Button>
             </CardHeader>
             <div className="pb-2">

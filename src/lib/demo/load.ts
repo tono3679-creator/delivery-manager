@@ -31,6 +31,7 @@ export async function loadDataset(sql: Sql, data: DemoDataset, extra?: (tx: Tran
     await insertRows(tx, "vehicles", data.vehicles);
     await insertRows(tx, "vehicle_assignments", data.vehicleAssignments);
     await insertRows(tx, "clients", data.clients);
+    await insertRows(tx, "client_invoices", data.invoices);
     await insertRows(tx, "delivery_orders", data.orders);
     await insertRows(tx, "delivery_status_logs", data.statusLogs);
     await insertRows(tx, "delivery_notes", data.notes);

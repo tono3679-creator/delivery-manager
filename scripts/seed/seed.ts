@@ -55,7 +55,7 @@ async function main() {
 
   console.log(
     `seed=${seed} 基準時刻=${now.toISOString()} 会社=${companyId}\n` +
-      `案件 ${data.orders.length} 件 / 履歴 ${data.statusLogs.length} 件 / 経費 ${data.expenses.length} 件` +
+      `案件 ${data.orders.length} 件 / 履歴 ${data.statusLogs.length} 件 / 経費 ${data.expenses.length} 件 / 請求 ${data.invoices.length} 件` +
       `（${((Date.now() - started) / 1000).toFixed(1)} 秒）`,
   );
   await sql.end();

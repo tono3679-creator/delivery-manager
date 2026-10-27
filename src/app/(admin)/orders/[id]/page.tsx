@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Building2, CalendarClock, ExternalLink, MapPin, MessageSquareText, Package, Phone, Truck, UserRound } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LateBadge, StatusBadge } from "@/components/common/status-badge";
 import { NoteForm } from "@/components/orders/note-form";
@@ -12,7 +13,7 @@ import { addOrderNote } from "@/lib/actions/orders";
 import { toJstDate } from "@/lib/date";
 import { asAdmin } from "@/lib/auth";
 import { getFormOptions, getOrderDetail } from "@/lib/data/orders";
-import { formatDateLong, formatDateTimeFull, formatNumber, formatTime, formatYen } from "@/lib/format";
+import { formatDate, formatDateLong, formatDateTimeFull, formatNumber, formatTime, formatYen } from "@/lib/format";
 import { mapSearchUrl, telUrl } from "@/lib/maps";
 import { orderToForm } from "@/lib/validation/order";
 
@@ -58,6 +59,7 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
               options={options}
               initial={orderToForm(order)}
               editOnOpen={sp.edit === "1"}
+              invoiceNo={order.invoiceNo}
             />
           </div>
         </div>
@@ -80,7 +82,19 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
                 </Item>
                 <Item icon={Package} label="荷物・料金">
                   {order.cargoType} × {formatNumber(order.quantity)}
-                  <span className="block text-sm tabular">{formatYen(order.fee)}</span>
+                  <span className="flex flex-wrap items-center gap-1.5 text-sm tabular">
+                    {formatYen(order.fee)}
+                    {order.invoiceNo ? (
+                      <Link href={`/clients/${order.clientId}`} className="hover:opacity-80" title="荷主の請求・取引履歴を開く">
+                        <Badge variant="success">請求済 {order.invoiceNo}</Badge>
+                      </Link>
+                    ) : order.status === "delivered" ? (
+                      <Badge variant="neutral">未請求</Badge>
+                    ) : null}
+                  </span>
+                  {order.invoiceIssuedOn && (
+                    <span className="block text-xs text-muted-foreground tabular">{formatDate(order.invoiceIssuedOn)} 発行</span>
+                  )}
                 </Item>
                 <Item icon={Building2} label="集荷先（荷主）">
                   {order.clientName}

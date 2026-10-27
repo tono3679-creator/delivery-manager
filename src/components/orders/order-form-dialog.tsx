@@ -24,9 +24,10 @@ const NONE = "__none";
 /**
  * 案件の登録・編集ダイアログ。
  * lock … "driver"：集荷後（担当は変えられない） / "schedule"：完了・キャンセル済み（担当も予定も変えられない）
+ * invoiceNo … 請求済みの案件の請求番号。荷主と料金も変えられない
  */
 export function OrderFormDialog({
-  open, onOpenChange, options, initial, orderId, orderNo, lock,
+  open, onOpenChange, options, initial, orderId, orderNo, lock, invoiceNo,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -35,7 +36,9 @@ export function OrderFormDialog({
   orderId?: string;
   orderNo?: string;
   lock?: "driver" | "schedule";
+  invoiceNo?: string;
 }) {
+  const lockBilling = Boolean(invoiceNo);
   const lockDriver = lock === "driver" || lock === "schedule";
   const lockSchedule = lock === "schedule";
   const router = useRouter();
@@ -103,7 +106,7 @@ export function OrderFormDialog({
                   control={control}
                   name="clientId"
                   render={({ field }) => (
-                    <Select value={field.value || undefined} onValueChange={(v) => { onClientChange(v); field.onChange(v); }}>
+                    <Select disabled={lockBilling} value={field.value || undefined} onValueChange={(v) => { onClientChange(v); field.onChange(v); }}>
                       <SelectTrigger id="clientId" aria-invalid={!!errors.clientId}><SelectValue placeholder="荷主を選択" /></SelectTrigger>
                       <SelectContent>
                         {options.clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
@@ -179,9 +182,14 @@ export function OrderFormDialog({
                   <Input id="quantity" type="number" inputMode="numeric" min={1} aria-invalid={!!errors.quantity} {...register("quantity", { valueAsNumber: true })} />
                 </Field>
                 <Field label="配送料金（円）" htmlFor="fee" error={errors.fee?.message} required>
-                  <Input id="fee" type="number" inputMode="numeric" min={0} step={100} aria-invalid={!!errors.fee} {...register("fee", { valueAsNumber: true })} />
+                  <Input id="fee" type="number" inputMode="numeric" min={0} step={100} readOnly={lockBilling} aria-invalid={!!errors.fee} {...register("fee", { valueAsNumber: true })} />
                 </Field>
               </div>
+              {lockBilling && (
+                <p className="text-keep text-xs text-muted-foreground sm:col-span-2">
+                  請求済み（{invoiceNo}）のため、荷主・料金・配送日は変更できません。変更するときは荷主の画面で請求を取り消してください。
+                </p>
+              )}
               <Field label="備考" htmlFor="notes" error={errors.notes?.message} className="sm:col-span-2">
                 <Textarea id="notes" rows={2} placeholder="例：午前中必着、要事前連絡" {...register("notes")} />
               </Field>

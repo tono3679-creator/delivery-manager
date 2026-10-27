@@ -74,6 +74,29 @@ export const INTEGRITY_CHECKS: { label: string; sql: string }[] = [
     sql: `select count(*) n from expenses where spent_on > app.today_jst()`,
   },
   {
+    label: "請求済みフラグが請求のひも付けと一致する",
+    sql: `select count(*) n from delivery_orders where invoiced <> (invoice_id is not null)`,
+  },
+  {
+    label: "請求金額・件数が、ひも付いた案件の料金合計・件数と一致する（取り消した請求には案件が無い）",
+    sql: `select count(*) n from client_invoices i
+          left join lateral (select count(*) c, coalesce(sum(o.fee), 0) s from delivery_orders o where o.invoice_id = i.id) t on true
+          where (i.cancelled_at is null and (t.c <> i.order_count or t.s <> i.amount))
+             or (i.cancelled_at is not null and t.c > 0)`,
+  },
+  {
+    label: "請求に含まれる案件は配送完了で、同じ会社・荷主・対象期間のもの",
+    sql: `select count(*) n from delivery_orders o join client_invoices i on i.id = o.invoice_id
+          where o.status <> 'delivered' or o.company_id <> i.company_id or o.client_id <> i.client_id
+             or app.jst_date(o.delivery_at) not between i.period_start and i.period_end`,
+  },
+  {
+    label: "請求は締め済みの月だけで、発行日は締め日より後・本日以前",
+    sql: `select count(*) n from client_invoices
+          where period_start >= date_trunc('month', app.today_jst())::date
+             or issued_on <= period_end or issued_on > app.today_jst()`,
+  },
+  {
     label: "現在の車両担当は1台につき1名",
     sql: `select count(*) n from (select vehicle_id from vehicle_assignments where end_on is null
           group by vehicle_id having count(*) > 1) t`,

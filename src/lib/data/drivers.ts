@@ -81,6 +81,9 @@ export type DriverDetail = {
   activeOrders: number;
   month: { orders: number; delivered: number; late: number; revenue: number; completionRate: number | null };
   series: { bucket: string; revenue: number; orders: number; delivered: number; late: number }[];
+  /** 本日（日本時間）の担当案件。集荷予定の早い順 */
+  today: { id: string; orderNo: string; deliveryName: string; clientName: string; pickupAt: Date; deliveryAt: Date; status: OrderStatus; isLate: boolean; fee: number }[];
+  /** 配送履歴（前日まで、新しい順） */
   recent: { id: string; orderNo: string; deliveryName: string; clientName: string; deliveryAt: Date; status: OrderStatus; isLate: boolean; fee: number }[];
 };
 
@@ -101,16 +104,22 @@ export async function getDriverDetail(tx: Tx, id: string, today: DateString): Pr
      where d.id = ${id}`;
   if (!d) return null;
   const from6 = startOfMonth(addMonths(today, -5));
-  const [[month], series, recent] = await Promise.all([
+  const [[month], series, todayRows, recent] = await Promise.all([
     tx<{ order_count: number; delivered_count: number; late_count: number; revenue: number; completion_rate: number | null }[]>`
       select order_count, delivered_count, late_count, revenue, completion_rate
         from analytics_by_driver(${startOfMonth(today)}::date, ${today}::date) where driver_id = ${id}`,
     tx<{ bucket: string; revenue: number; order_count: number; delivered_count: number; late_count: number }[]>`
       select * from analytics_order_series(${from6}::date, ${today}::date, 'month', null, ${id})`,
+    tx<{ id: string; order_no: string; delivery_name: string; client_name: string; pickup_at: Date; delivery_at: Date; status: OrderStatus; is_late: boolean; fee: number }[]>`
+      select o.id, o.order_no, o.delivery_name, c.name client_name, o.pickup_at, o.delivery_at, o.status, f.is_late, o.fee
+        from delivery_orders o join v_order_facts f on f.id = o.id join clients c on c.id = o.client_id
+       where o.driver_id = ${id}
+         and o.delivery_at >= app.jst_start(${today}::date) and o.delivery_at < app.jst_start(${today}::date + 1)
+       order by o.pickup_at, o.order_no`,
     tx<{ id: string; order_no: string; delivery_name: string; client_name: string; delivery_at: Date; status: OrderStatus; is_late: boolean; fee: number }[]>`
       select o.id, o.order_no, o.delivery_name, c.name client_name, o.delivery_at, o.status, f.is_late, o.fee
         from delivery_orders o join v_order_facts f on f.id = o.id join clients c on c.id = o.client_id
-       where o.driver_id = ${id} and o.delivery_at < app.jst_start(${today}::date + 1)
+       where o.driver_id = ${id} and o.delivery_at < app.jst_start(${today}::date)
        order by o.delivery_at desc limit 8`,
   ]);
   return {
@@ -124,6 +133,10 @@ export async function getDriverDetail(tx: Tx, id: string, today: DateString): Pr
       revenue: month?.revenue ?? 0, completionRate: month?.completion_rate ?? null,
     },
     series: series.map((s) => ({ bucket: toDateString(s.bucket), revenue: s.revenue, orders: s.order_count, delivered: s.delivered_count, late: s.late_count })),
+    today: todayRows.map((r) => ({
+      id: r.id, orderNo: r.order_no, deliveryName: r.delivery_name, clientName: r.client_name, pickupAt: r.pickup_at, deliveryAt: r.delivery_at,
+      status: r.status, isLate: r.is_late, fee: r.fee,
+    })),
     recent: recent.map((r) => ({
       id: r.id, orderNo: r.order_no, deliveryName: r.delivery_name, clientName: r.client_name, deliveryAt: r.delivery_at,
       status: r.status, isLate: r.is_late, fee: r.fee,

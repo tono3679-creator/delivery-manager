@@ -7,10 +7,11 @@ import { BackLink, DetailItem, MiniStat, Muted } from "@/components/common/detai
 import { MonthlyRevenueChart } from "@/components/analytics/charts";
 import { ClientFormButton } from "@/components/masters/client-form";
 import { DeleteMasterButton } from "@/components/masters/delete-master-button";
+import { ClientBillingTable } from "@/components/masters/client-billing";
 import { RecentOrders } from "@/components/masters/recent-orders";
 import { asAdmin } from "@/lib/auth";
 import { todayJst } from "@/lib/date";
-import { getClientDetail } from "@/lib/data/clients";
+import { getClientBilling, getClientDetail } from "@/lib/data/clients";
 import { formatDate, formatNumber, formatYen } from "@/lib/format";
 import { mapSearchUrl, telUrl } from "@/lib/maps";
 
@@ -21,8 +22,12 @@ export const metadata = { title: "荷主詳細" };
 export default async function ClientDetailPage({ params }: Props) {
   const { id } = await params;
   const today = todayJst();
-  const client = await asAdmin((tx) => getClientDetail(tx, id, today));
-  if (!client) notFound();
+  const data = await asAdmin(async (tx) => {
+    const client = await getClientDetail(tx, id, today);
+    return client ? { client, billing: await getClientBilling(tx, client.id, today) } : null;
+  });
+  if (!data) notFound();
+  const { client, billing } = data;
 
   const thisMonth = client.series.at(-1);
   const lastMonth = client.series.at(-2);
@@ -65,9 +70,16 @@ export default async function ClientDetailPage({ params }: Props) {
         </div>
       </div>
 
-      <section aria-label="売上の概要" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <section aria-label="売上の概要" className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         <MiniStat label={`${month}月の売上`} value={formatYen(thisMonth?.revenue ?? 0)} sub={`${month}月1日〜本日・配送完了分`} />
+        <MiniStat label={`${month}月の配送件数`} value={formatNumber(thisMonth?.orders ?? 0, "件")} sub={`うち配送完了 ${formatNumber(thisMonth?.delivered ?? 0, "件")}`} />
         <MiniStat label={`${prevMonth}月の売上`} value={formatYen(lastMonth?.revenue ?? 0)} />
+        <MiniStat
+          label="未請求金額"
+          value={formatYen(billing.unbilled)}
+          tone={billing.unbilledClosed > 0 ? "warning" : undefined}
+          sub={billing.unbilledClosed > 0 ? `うち締め済みの月 ${formatYen(billing.unbilledClosed)}` : billing.unbilled > 0 ? `${month}月分（締め前）` : "すべて請求済み"}
+        />
         <MiniStat label="直近6か月の売上" value={formatYen(sixMonthRevenue)} sub={`配送完了 ${formatNumber(sixMonthDelivered, "件")}`} />
         <MiniStat label="平均単価" value={sixMonthDelivered === 0 ? "—" : formatYen(Math.round(sixMonthRevenue / sixMonthDelivered))} sub="直近6か月・1件あたり" />
       </section>
@@ -81,6 +93,15 @@ export default async function ClientDetailPage({ params }: Props) {
             <CardContent>
               <MonthlyRevenueChart data={client.series} label={`${client.name}の月別売上の棒グラフ`} />
             </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>請求・取引履歴</CardTitle>
+              <span className="hidden text-xs text-muted-foreground sm:inline">月末締め・配送完了分を請求</span>
+            </CardHeader>
+            <div className="pb-2">
+              <ClientBillingTable months={billing.months} clientId={client.id} clientName={client.name} />
+            </div>
           </Card>
           <Card>
             <CardHeader>

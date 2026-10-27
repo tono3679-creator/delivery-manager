@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { asUser } from "@/lib/db";
 import { getAuthUserId, getCurrentUser } from "@/lib/auth";
-import { createDemoSandbox } from "@/lib/demo/sandbox";
+import { createDemoSandbox, DemoCapacityError, ensureDemoCapacity } from "@/lib/demo/sandbox";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -29,6 +29,12 @@ export async function startDemo(role: "admin" | "driver"): Promise<ActionResult>
   const supabase = await createSupabaseServerClient();
   let auth = await getAuthUserId();
   if (!auth) {
+    // 匿名ユーザーを作る前に、デモ環境を新しく作れるか確かめる
+    try {
+      await ensureDemoCapacity();
+    } catch (e) {
+      return demoError(e);
+    }
     const { data, error } = await supabase.auth.signInAnonymously();
     if (error || !data.user) {
       return { ok: false, error: "デモを開始できませんでした。時間をおいて再度お試しください" };
@@ -38,10 +44,20 @@ export async function startDemo(role: "admin" | "driver"): Promise<ActionResult>
   try {
     await createDemoSandbox(auth.id, role);
   } catch (e) {
-    console.error(e);
-    return { ok: false, error: "デモデータの準備に失敗しました。時間をおいて再度お試しください" };
+    return demoError(e);
   }
   redirect(role === "admin" ? "/dashboard" : "/driver");
+}
+
+function demoError(e: unknown): ActionResult {
+  if (e instanceof DemoCapacityError) {
+    return {
+      ok: false,
+      error: "ただいまデモの利用が集中しているため、新しいデモ環境を用意できません。しばらくしてから再度お試しください",
+    };
+  }
+  console.error(e);
+  return { ok: false, error: "デモデータの準備に失敗しました。時間をおいて再度お試しください" };
 }
 
 export async function signOut(): Promise<void> {

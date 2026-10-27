@@ -8,7 +8,7 @@ import { approximateLocation } from "@/lib/domain/location";
 import { canTransition, DELETABLE_STATUSES, ORDER_STATUS_LABEL, type OrderStatus } from "@/lib/domain/status";
 import { formatTime } from "@/lib/format";
 import { noteSchema, orderFormSchema, parseLocalDateTime, statusChangeSchema, type OrderFormInput } from "@/lib/validation/order";
-import { toUserMessage } from "./errors";
+import { toFieldErrors, toUserMessage } from "./errors";
 
 export type Conflict = { id: string; orderNo: string; deliveryName: string; window: string };
 
@@ -25,15 +25,6 @@ function revalidateOrders(id?: string) {
   if (id) revalidatePath(`/orders/${id}`);
 }
 
-function fieldErrors(error: z.ZodError): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const issue of error.issues) {
-    const key = String(issue.path[0] ?? "form");
-    out[key] ??= issue.message;
-  }
-  return out;
-}
-
 /**
  * 配送案件の登録・更新。
  * 同じドライバーの予定と時間が重なる場合は、confirmOverlap が無ければ保存せずに確認を求める（警告）。
@@ -41,7 +32,7 @@ function fieldErrors(error: z.ZodError): Record<string, string> {
  */
 export async function saveOrder(input: OrderFormInput, options: { id?: string; confirmOverlap?: boolean } = {}): Promise<SaveResult> {
   const parsed = orderFormSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "入力内容を確認してください", fieldErrors: fieldErrors(parsed.error) };
+  if (!parsed.success) return { ok: false, error: "入力内容を確認してください", fieldErrors: toFieldErrors(parsed.error) };
   const v = parsed.data;
   if (options.id && !z.uuid().safeParse(options.id).success) return { ok: false, error: "案件が見つかりません" };
   const pickupAt = parseLocalDateTime(v.pickupAt);

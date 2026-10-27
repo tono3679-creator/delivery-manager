@@ -15,3 +15,20 @@ export function toUserMessage(error: unknown, fallback = "保存に失敗しま�
   console.error(error);
   return fallback;
 }
+
+/** zod の検証エラーを「項目名 → 最初のメッセージ」にする（フォームの項目下に表示する） */
+export function toFieldErrors(error: { issues: { path: PropertyKey[]; message: string }[] }): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const issue of error.issues) {
+    const key = String(issue.path[0] ?? "form");
+    out[key] ??= issue.message;
+  }
+  return out;
+}
+
+/** 一意制約違反か（constraint 名の一部で判定） */
+export function isUniqueViolation(error: unknown, constraint: string): boolean {
+  if (!error || typeof error !== "object") return false;
+  const e = error as { code?: string; constraint_name?: string; constraint?: string };
+  return e.code === "23505" && (e.constraint_name ?? e.constraint ?? "").includes(constraint);
+}

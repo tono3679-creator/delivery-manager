@@ -1,6 +1,7 @@
 import "server-only";
 import type { Tx } from "@/lib/db";
 import { addDays, addMonths, startOfMonth, todayJst, type DateString } from "@/lib/date";
+import { DEADLINE_WARNING_DAYS } from "@/lib/domain/deadline";
 import type { OrderStatus } from "@/lib/domain/status";
 
 export type DashboardKpis = {
@@ -154,15 +155,15 @@ export async function getDashboardAlerts(tx: Tx, today: DateString = todayJst())
            inspection_expires_on - ${today}::date insp_days, insurance_expires_on - ${today}::date ins_days
       from vehicles
      where status <> 'retired'
-       and (inspection_expires_on <= ${today}::date + 30 or insurance_expires_on <= ${today}::date + 30)`;
+       and (inspection_expires_on <= ${today}::date + ${DEADLINE_WARNING_DAYS}::int or insurance_expires_on <= ${today}::date + ${DEADLINE_WARNING_DAYS}::int)`;
   return {
     lateOrders: late.slice(0, 5).map((r) => ({ id: r.id, orderNo: r.order_no, deliveryName: r.delivery_name, driverName: r.driver_name, deliveryAt: r.delivery_at })),
     lateCount: late.length,
     unassignedToday: un.today,
     unassignedUpcoming: un.upcoming,
-    inspection: vehicles.filter((v) => v.insp_days <= 30).sort((a, b) => a.insp_days - b.insp_days)
+    inspection: vehicles.filter((v) => v.insp_days <= DEADLINE_WARNING_DAYS).sort((a, b) => a.insp_days - b.insp_days)
       .map((v) => ({ id: v.id, plate: v.plate_number, date: toDateString(v.inspection_expires_on), days: v.insp_days })),
-    insurance: vehicles.filter((v) => v.ins_days <= 30).sort((a, b) => a.ins_days - b.ins_days)
+    insurance: vehicles.filter((v) => v.ins_days <= DEADLINE_WARNING_DAYS).sort((a, b) => a.ins_days - b.ins_days)
       .map((v) => ({ id: v.id, plate: v.plate_number, date: toDateString(v.insurance_expires_on), days: v.ins_days })),
   };
 }

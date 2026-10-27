@@ -64,7 +64,7 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
       </div>
 
       <div className="grid gap-5 lg:grid-cols-3">
-        <div className="space-y-5 lg:col-span-2">
+        <div className="min-w-0 space-y-5 lg:col-span-2">
           <Card>
             <CardHeader><CardTitle>配送内容</CardTitle></CardHeader>
             <CardContent>

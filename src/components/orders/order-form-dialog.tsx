@@ -11,31 +11,15 @@ import {
   AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Field } from "@/components/common/form-field";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { saveOrder, type Conflict } from "@/lib/actions/orders";
 import { DRIVER_STATUS_LABEL, type DriverStatus } from "@/lib/domain/labels";
 import { orderFormSchema, type OrderFormInput, type OrderFormValues } from "@/lib/validation/order";
 import type { FormOptions } from "@/lib/data/orders";
-import { cn } from "@/lib/utils";
 
 const NONE = "__none";
-
-function Field({ label, htmlFor, error, required, children, className }: {
-  label: string; htmlFor: string; error?: string; required?: boolean; children: React.ReactNode; className?: string;
-}) {
-  return (
-    <div className={cn("grid gap-1.5", className)}>
-      <Label htmlFor={htmlFor}>
-        {label}
-        {required && <span className="text-xs text-destructive">必須</span>}
-      </Label>
-      {children}
-      {error && <p className="text-xs text-destructive" role="alert">{error}</p>}
-    </div>
-  );
-}
 
 /**
  * 案件の登録・編集ダイアログ。

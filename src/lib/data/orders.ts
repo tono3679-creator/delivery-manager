@@ -144,6 +144,9 @@ export type OrderDetail = OrderListRow & {
   driverPhone: string | null;
   notes: string | null;
   invoiced: boolean;
+  /** 請求済みなら請求番号（請求済みの案件は料金・荷主・配送日を変更できない） */
+  invoiceNo: string | null;
+  invoiceIssuedOn: string | null;
   createdAt: Date;
   updatedAt: Date;
   logs: { id: string; from: OrderStatus | null; to: OrderStatus; by: string | null; note: string | null; at: Date }[];
@@ -154,12 +157,14 @@ export async function getOrderDetail(tx: Tx, id: string): Promise<OrderDetail | 
   if (!z.uuid().safeParse(id).success) return null;
   const [o] = await tx<Record<string, never>[]>`
     select o.*, c.name client_name, c.phone client_phone, c.contact_name client_contact,
-           d.name driver_name, d.phone driver_phone, v.plate_number, v.vehicle_type, f.is_late
+           d.name driver_name, d.phone driver_phone, v.plate_number, v.vehicle_type, f.is_late,
+           ci.invoice_no, ci.issued_on invoice_issued_on
       from delivery_orders o
       join v_order_facts f on f.id = o.id
       join clients c on c.id = o.client_id
       left join drivers d on d.id = o.driver_id
       left join vehicles v on v.id = o.vehicle_id
+      left join client_invoices ci on ci.id = o.invoice_id
      where o.id = ${id}`;
   if (!o) return null;
   const [logs, memos] = await Promise.all([
@@ -198,6 +203,8 @@ export async function getOrderDetail(tx: Tx, id: string): Promise<OrderDetail | 
     completedAt: r.completed_at as Date | null,
     notes: r.notes as string | null,
     invoiced: r.invoiced as boolean,
+    invoiceNo: (r.invoice_no as string | null) ?? null,
+    invoiceIssuedOn: r.invoice_issued_on ? String(r.invoice_issued_on).slice(0, 10) : null,
     createdAt: r.created_at as Date,
     updatedAt: r.updated_at as Date,
     logs: logs.map((l) => ({ id: l.id, from: l.from_status, to: l.to_status, by: l.changed_by_name, note: l.note, at: l.created_at })),

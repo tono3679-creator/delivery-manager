@@ -8,7 +8,7 @@ import { approximateLocation } from "@/lib/domain/location";
 import { canTransition, DELETABLE_STATUSES, ORDER_STATUS_LABEL, type OrderStatus } from "@/lib/domain/status";
 import { formatTime } from "@/lib/format";
 import { noteSchema, orderFormSchema, parseLocalDateTime, statusChangeSchema, type OrderFormInput } from "@/lib/validation/order";
-import { toUserMessage } from "./errors";
+import { toFieldErrors, toUserMessage } from "./errors";
 
 export type Conflict = { id: string; orderNo: string; deliveryName: string; window: string };
 
@@ -25,15 +25,6 @@ function revalidateOrders(id?: string) {
   if (id) revalidatePath(`/orders/${id}`);
 }
 
-function fieldErrors(error: z.ZodError): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const issue of error.issues) {
-    const key = String(issue.path[0] ?? "form");
-    out[key] ??= issue.message;
-  }
-  return out;
-}
-
 /**
  * 配送案件の登録・更新。
  * 同じドライバーの予定と時間が重なる場合は、confirmOverlap が無ければ保存せずに確認を求める（警告）。
@@ -41,7 +32,7 @@ function fieldErrors(error: z.ZodError): Record<string, string> {
  */
 export async function saveOrder(input: OrderFormInput, options: { id?: string; confirmOverlap?: boolean } = {}): Promise<SaveResult> {
   const parsed = orderFormSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "入力内容を確認してください", fieldErrors: fieldErrors(parsed.error) };
+  if (!parsed.success) return { ok: false, error: "入力内容を確認してください", fieldErrors: toFieldErrors(parsed.error) };
   const v = parsed.data;
   if (options.id && !z.uuid().safeParse(options.id).success) return { ok: false, error: "案件が見つかりません" };
   const pickupAt = parseLocalDateTime(v.pickupAt);
@@ -53,9 +44,21 @@ export async function saveOrder(input: OrderFormInput, options: { id?: string; c
       // 編集時は、担当か時刻が変わったときだけ重複を確認する（料金の修正などで毎回警告しない）
       let scheduleChanged = true;
       if (options.id) {
-        const [current] = await tx<{ status: string; driver_id: string | null; pickup_at: Date; delivery_at: Date }[]>`
-          select status, driver_id, pickup_at, delivery_at from delivery_orders where id = ${options.id} for update`;
+        const [current] = await tx<{
+          status: string; driver_id: string | null; pickup_at: Date; delivery_at: Date; client_id: string; fee: number; invoice_id: string | null;
+        }[]>`
+          select status, driver_id, pickup_at, delivery_at, client_id, fee, invoice_id from delivery_orders where id = ${options.id} for update`;
         if (!current) return { ok: false as const, error: "案件が見つかりません（削除された可能性があります）" };
+        // 請求済みの案件は請求金額の根拠（料金・荷主・配送日）を変えられない（DB のトリガーでも拒否する）
+        if (current.invoice_id) {
+          const fieldErrors: Record<string, string> = {};
+          if (current.fee !== v.fee) fieldErrors.fee = "請求済みのため変更できません";
+          if (current.client_id !== v.clientId) fieldErrors.clientId = "請求済みのため変更できません";
+          if (current.delivery_at.getTime() !== deliveryAt.getTime()) fieldErrors.deliveryAt = "請求済みのため変更できません";
+          if (Object.keys(fieldErrors).length > 0) {
+            return { ok: false as const, error: "請求済みの案件は料金・荷主・配送日を変更できません（請求を取り消してから変更してください）", fieldErrors };
+          }
+        }
         if (["picked_up", "in_transit"].includes(current.status) && current.driver_id !== v.driverId) {
           return { ok: false as const, error: "集荷後の案件はドライバーを変更できません", fieldErrors: { driverId: "集荷後は変更できません" } };
         }

@@ -57,6 +57,8 @@ export type DemoDataset = {
   vehicles: Row[];
   vehicleAssignments: Row[];
   clients: Row[];
+  /** 荷主への請求（月末締め）。案件より先に登録する */
+  invoices: Row[];
   orders: Row[];
   statusLogs: Row[];
   notes: Row[];
@@ -521,7 +523,9 @@ export function generateDemoData(options: GenerateOptions): DemoDataset {
       status: o.status,
       completed_at: o.status === "delivered" ? o.completedAt : null,
       notes: rnd.chance(0.08) ? rnd.pick(["午前中必着", "要事前連絡", "台車使用可", "時間指定厳守", "納品書2部"]) : null,
-      invoiced: o.status === "delivered" && o.day < startOfMonth(today),
+      // 請求は最後にまとめて作る（下の「請求」）
+      invoice_id: null,
+      invoiced: false,
       created_by: null,
       created_at: o.createdAt,
       updated_at: updatedAt,
@@ -631,6 +635,59 @@ export function generateDemoData(options: GenerateOptions): DemoDataset {
       });
     });
 
+  // ---- 請求（月末締め・翌月5日発行） ----
+  // 締め済みの月の配送完了分を荷主ごとにまとめる。発行日が来ていない月は未請求のまま。
+  // 直近の締め月は3社を未請求で残し、荷主画面の「請求済みにする」を試せるようにする。
+  const invoices: Row[] = [];
+  const thisMonth = startOfMonth(today);
+  const lastClosed = startOfMonth(addDays(thisMonth, -1));
+  const unbilledLastMonth = new Set<string>();
+  while (unbilledLastMonth.size < Math.min(3, clients.length)) unbilledLastMonth.add(rnd.pick(clients).id);
+  const orderRows = new Map(orders.map((r) => [r.id as string, r]));
+  const groups = new Map<string, { month: DateString; clientIndex: number; orders: PlannedOrder[] }>();
+  for (const o of planned) {
+    if (o.status !== "delivered" || o.day >= thisMonth) continue;
+    const month = startOfMonth(o.day);
+    const key = `${month}|${o.clientId}`;
+    const group = groups.get(key) ?? { month, clientIndex: clients.findIndex((c) => c.id === o.clientId), orders: [] };
+    group.orders.push(o);
+    groups.set(key, group);
+  }
+  const monthSeq = new Map<string, number>();
+  [...groups.values()]
+    .sort((a, b) => a.month.localeCompare(b.month) || a.clientIndex - b.clientIndex)
+    .forEach((g) => {
+      const issuedOn = addDays(endOfMonth(g.month), 5);
+      if (issuedOn > today) return;
+      if (g.month === lastClosed && unbilledLastMonth.has(clients[g.clientIndex].id)) return;
+      const seq = (monthSeq.get(g.month) ?? 0) + 1;
+      monthSeq.set(g.month, seq);
+      const id = ids.uuid();
+      const issuedAt = new Date(Math.min(jstDateTime(issuedOn, 10 * 60).getTime(), now.getTime()));
+      invoices.push({
+        id,
+        company_id: companyId,
+        client_id: clients[g.clientIndex].id,
+        invoice_no: `INV-${g.month.slice(0, 4)}${g.month.slice(5, 7)}-${String(seq).padStart(3, "0")}`,
+        period_start: g.month,
+        period_end: endOfMonth(g.month),
+        order_count: g.orders.length,
+        amount: g.orders.reduce((s, o) => s + o.fee, 0),
+        issued_on: issuedOn,
+        notes: null,
+        created_by: null,
+        created_at: issuedAt,
+        updated_at: issuedAt,
+      });
+      for (const o of g.orders) {
+        const row = orderRows.get(o.id);
+        if (row) {
+          row.invoice_id = id;
+          row.invoiced = true;
+        }
+      }
+    });
+
   // ロール切替で使うドライバー：本日の担当が最も多い人
   const todayCount = new Map<number, number>();
   todayOrders.forEach((o) => {
@@ -647,6 +704,7 @@ export function generateDemoData(options: GenerateOptions): DemoDataset {
     vehicles: vehicles.map((v) => v.row),
     vehicleAssignments,
     clients: clients.map((c) => c.row),
+    invoices,
     orders,
     statusLogs,
     notes,

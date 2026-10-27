@@ -54,7 +54,7 @@ export default async function DriversPage({ searchParams }: { searchParams: Sear
           <EmptyState icon={Users} title="条件に合うドライバーはいません" description="検索条件を変えるか、「条件をクリア」で絞り込みを解除してください。" />
         ) : (
           <>
-            <div className="hidden md:block">
+            <div className="hidden xl:block">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -91,7 +91,7 @@ export default async function DriversPage({ searchParams }: { searchParams: Sear
                 </TableBody>
               </Table>
             </div>
-            <ul className="divide-y md:hidden">
+            <ul className="divide-y xl:hidden">
               {drivers.map((d) => (
                 <li key={d.id}>
                   <Link href={`/drivers/${d.id}`} className="block space-y-1.5 px-4 py-3">

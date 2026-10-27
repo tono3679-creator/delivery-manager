@@ -76,7 +76,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Searc
         ) : (
           <>
             {/* PC：表 */}
-            <div className="hidden md:block">
+            <div className="hidden xl:block">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -94,7 +94,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Searc
                   {list.rows.map((o) => (
                     <TableRow key={o.id}>
                       <TableCell className="pl-5">
-                        <Link href={`/orders/${o.id}`} className="font-medium text-brand tabular hover:underline">{o.orderNo}</Link>
+                        <Link href={`/orders/${o.id}`} className="font-medium whitespace-nowrap text-brand tabular hover:underline">{o.orderNo}</Link>
                       </TableCell>
                       <TableCell className="whitespace-nowrap tabular">
                         <div>{formatDateShort(o.deliveryAt)}</div>
@@ -125,8 +125,8 @@ export default async function OrdersPage({ searchParams }: { searchParams: Searc
               </Table>
             </div>
 
-            {/* スマホ：カード */}
-            <ul className="divide-y md:hidden">
+            {/* スマホ・タブレット：カード */}
+            <ul className="divide-y xl:hidden">
               {list.rows.map((o) => (
                 <li key={o.id} className="flex items-start gap-2 px-4 py-3">
                   <Link href={`/orders/${o.id}`} className="min-w-0 flex-1 space-y-1">

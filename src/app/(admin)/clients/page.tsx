@@ -48,7 +48,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Sear
           <EmptyState icon={Building2} title="条件に合う荷主はありません" description="検索条件を変えるか、「条件をクリア」で絞り込みを解除してください。" />
         ) : (
           <>
-            <div className="hidden md:block">
+            <div className="hidden xl:block">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -88,7 +88,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Sear
                 </TableBody>
               </Table>
             </div>
-            <ul className="divide-y md:hidden">
+            <ul className="divide-y xl:hidden">
               {clients.map((c) => (
                 <li key={c.id}>
                   <Link href={`/clients/${c.id}`} className="block space-y-1 px-4 py-3">

@@ -52,7 +52,7 @@ export function AlertsCard({ alerts }: { alerts: DashboardAlerts }) {
             対応が必要な項目はありません
           </div>
         ) : (
-          <ul className="grid gap-2">
+          <ul className="grid grid-cols-1 gap-2">
             {items.map((item, i) => (
               <li key={i}>
                 <Link
@@ -68,7 +68,7 @@ export function AlertsCard({ alerts }: { alerts: DashboardAlerts }) {
                       <span className="sr-only">{item.tone === "danger" ? "重要：" : "注意："}</span>
                       {item.title}
                     </div>
-                    {item.detail && <div className="truncate text-xs text-muted-foreground">{item.detail}</div>}
+                    {item.detail && <div className="line-clamp-2 text-xs text-muted-foreground">{item.detail}</div>}
                   </div>
                   <ChevronRight className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden />
                 </Link>

@@ -20,7 +20,7 @@ export function DayDoneNotice({
 }) {
   const href = `/dispatch?date=${nextDay}${view === "map" ? "&view=map" : ""}`;
   return (
-    <div role="status" className={cn("flex flex-col gap-1.5 rounded-lg border border-success/30 bg-success-soft/60 px-3 py-2.5 text-sm sm:flex-row sm:items-center sm:justify-between", className)}>
+    <div role="status" className={cn("flex flex-col gap-1 rounded-lg border border-success/30 bg-success-soft/60 px-3 py-2.5 text-sm", className)}>
       <p className="flex items-start gap-2">
         <CircleCheckBig className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />
         <span className="text-keep">
@@ -28,7 +28,7 @@ export function DayDoneNotice({
         </span>
       </p>
       {nextCount > 0 && (
-        <Link href={href} className="text-keep shrink-0 pl-6 font-medium text-brand hover:underline sm:pl-0">
+        <Link href={href} className="text-keep pl-6 font-medium text-brand hover:underline">
           明日（{formatDateShort(nextDay)}）の予定 {formatNumber(nextCount)}件
           {nextUnassigned > 0 && <span className="text-warning-strong">（未割当 {formatNumber(nextUnassigned)}件）</span>}
           を見る

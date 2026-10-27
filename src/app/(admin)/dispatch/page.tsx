@@ -12,6 +12,8 @@ import { asAdmin } from "@/lib/auth";
 import { getDispatchBoard } from "@/lib/data/dispatch";
 import { getMapOrders } from "@/lib/data/map";
 import { getFormOptions } from "@/lib/data/orders";
+import { getDayCounts } from "@/lib/data/dashboard";
+import { DayDoneNotice } from "@/components/dashboard/day-done-notice";
 import { addDays, daysBetween, isDateString, todayJst } from "@/lib/date";
 import { overlappingIds } from "@/lib/domain/schedule";
 import { formatDateLong, formatNumber } from "@/lib/format";
@@ -30,13 +32,15 @@ export default async function DispatchPage({ searchParams }: { searchParams: Sea
   const view = sp.view === "map" ? "map" : "board";
   const driverFilter = view === "map" && typeof sp.driver === "string" ? sp.driver : undefined;
 
-  const { board, options, mapOrders } = await asAdmin(async (tx) => {
-    const [board, options, mapOrders] = await Promise.all([
+  const nextDay = addDays(day, 1);
+  const { board, options, mapOrders, next } = await asAdmin(async (tx) => {
+    const [board, options, mapOrders, next] = await Promise.all([
       getDispatchBoard(tx, day),
       getFormOptions(tx),
       view === "map" ? getMapOrders(tx, day, driverFilter) : Promise.resolve(null),
+      day === today ? getDayCounts(tx, nextDay) : Promise.resolve(null),
     ]);
-    return { board, options, mapOrders };
+    return { board, options, mapOrders, next };
   });
   const viewHref = (v: "board" | "map") => {
     const q = new URLSearchParams();
@@ -48,6 +52,8 @@ export default async function DispatchPage({ searchParams }: { searchParams: Sea
 
   const active = board.orders.filter((o) => o.status !== "cancelled");
   const unassigned = active.filter((o) => o.status === "unassigned").length;
+  // 本日の配送がすべて終わったら（夜に開いたときなど）、明日の予定へ案内する
+  const dayDone = next !== null && active.length > 0 && active.every((o) => o.status === "delivered" || o.status === "failed");
   const assignedDrivers = new Set(active.map((o) => o.driverId).filter(Boolean)).size;
   let overlapCount = 0;
   for (const d of board.drivers) {
@@ -96,6 +102,18 @@ export default async function DispatchPage({ searchParams }: { searchParams: Sea
           </dl>
         </div>
 
+        {dayDone && next && (
+          <div className="border-b px-4 py-3 sm:px-5">
+            <DayDoneNotice
+              delivered={active.filter((o) => o.status === "delivered").length}
+              failed={active.filter((o) => o.status === "failed").length}
+              nextDay={nextDay}
+              nextCount={next.total}
+              nextUnassigned={next.unassigned}
+              view={view}
+            />
+          </div>
+        )}
         {view === "map" && mapOrders ? (
           <div className="space-y-3 p-4 sm:p-5">
             <MapDriverFilter

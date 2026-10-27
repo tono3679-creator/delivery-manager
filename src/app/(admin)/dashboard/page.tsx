@@ -12,12 +12,13 @@ import { KpiCard } from "@/components/dashboard/kpi-card";
 import { AlertsCard } from "@/components/dashboard/alerts-card";
 import { HorizontalBars, SalesTrendChart, StatusDonut } from "@/components/dashboard/charts";
 import { MapPanel } from "@/components/map/map-panel";
+import { DayDoneNotice } from "@/components/dashboard/day-done-notice";
 import { asAdmin } from "@/lib/auth";
 import {
-  getClientRanking, getDashboardAlerts, getDashboardKpis, getDashboardSeries, getDriverPerformance, getTodayOrders,
+  getClientRanking, getDashboardAlerts, getDashboardKpis, getDashboardSeries, getDriverPerformance, getTodayOrders, getDayCounts,
 } from "@/lib/data/dashboard";
 import { getMapOrders } from "@/lib/data/map";
-import { startOfMonth, todayJst } from "@/lib/date";
+import { addDays, startOfMonth, todayJst } from "@/lib/date";
 import { formatNumber, formatPercent, formatTime, formatYen, formatYenCompact } from "@/lib/format";
 
 export const metadata = { title: "ダッシュボード" };
@@ -25,8 +26,9 @@ export const metadata = { title: "ダッシュボード" };
 export default async function DashboardPage() {
   const today = todayJst();
   const monthStart = startOfMonth(today);
-  const { kpis, series, drivers, clients, orders, alerts, mapOrders } = await asAdmin(async (tx) => {
-    const [kpis, series, drivers, clients, orders, alerts, mapOrders] = await Promise.all([
+  const tomorrow = addDays(today, 1);
+  const { kpis, series, drivers, clients, orders, alerts, mapOrders, next } = await asAdmin(async (tx) => {
+    const [kpis, series, drivers, clients, orders, alerts, mapOrders, next] = await Promise.all([
       getDashboardKpis(tx, today),
       getDashboardSeries(tx, today),
       getDriverPerformance(tx, monthStart, today),
@@ -34,9 +36,11 @@ export default async function DashboardPage() {
       getTodayOrders(tx, today, 8),
       getDashboardAlerts(tx, today),
       getMapOrders(tx, today),
+      getDayCounts(tx, tomorrow),
     ]);
-    return { kpis, series, drivers, clients, orders, alerts, mapOrders };
+    return { kpis, series, drivers, clients, orders, alerts, mapOrders, next };
   });
+  const dayDone = kpis.planned > 0 && kpis.inProgress === 0 && kpis.notStarted === 0;
 
   return (
     <div className="space-y-5">
@@ -82,7 +86,10 @@ export default async function DashboardPage() {
               <Link href="/dispatch?view=map">配車管理で開く <ArrowRight aria-hidden /></Link>
             </Button>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
+            {dayDone && (
+              <DayDoneNotice delivered={kpis.delivered} failed={kpis.failed} nextDay={tomorrow} nextCount={next.total} nextUnassigned={next.unassigned} view="map" />
+            )}
             <MapPanel orders={mapOrders} fitKey={today} mapClassName="h-72 sm:h-80" label="本日の配送先の地図" />
           </CardContent>
         </Card>

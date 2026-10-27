@@ -198,3 +198,33 @@ describe("書いた人の記録", () => {
     ).rejects.toThrow(/row-level security/);
   });
 });
+
+describe("デモ環境の上限", () => {
+  it("上限に達したら期限切れのデモを片付けてから数え直し、それでも多ければ断る", async () => {
+    process.env.DATABASE_URL ??= process.env.TEST_DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/dm";
+    const { ensureDemoCapacity, DemoCapacityError } = await import("@/lib/demo/sandbox");
+    const [{ n: active }] = await sql<{ n: number }[]>`
+      select count(*)::int n from companies where is_demo and demo_expires_at > now()`;
+    expect(active).toBeGreaterThanOrEqual(1); // a はデモ会社
+
+    // 期限切れのデモ会社を1社用意する
+    const [expired] = await sql<{ id: string }[]>`
+      insert into companies (name, is_demo, demo_expires_at) values ('期限切れデモ', true, now() - interval '1 hour') returning id`;
+    try {
+      process.env.DEMO_MAX_ACTIVE = String(active + 1);
+      await expect(ensureDemoCapacity()).resolves.toBeUndefined();
+      // 期限切れは数えない（まだ片付けない）
+      expect(await sql`select 1 from companies where id = ${expired.id}`).toHaveLength(1);
+
+      process.env.DEMO_MAX_ACTIVE = String(active);
+      await expect(ensureDemoCapacity()).rejects.toBeInstanceOf(DemoCapacityError);
+      // 断る前に期限切れのデモは片付けている
+      expect(await sql`select 1 from companies where id = ${expired.id}`).toHaveLength(0);
+    } finally {
+      delete process.env.DEMO_MAX_ACTIVE;
+      await sql`delete from companies where id = ${expired.id}`;
+      await globalThis.__dmSql?.end();
+      globalThis.__dmSql = undefined;
+    }
+  });
+});

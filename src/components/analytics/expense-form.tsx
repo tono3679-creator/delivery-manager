@@ -66,7 +66,7 @@ function ExpenseFormDialog({
                 control={control}
                 name="category"
                 render={({ field }) => (
-                  <Select value={field.value || undefined} onValueChange={field.onChange}>
+                  <Select value={field.value ?? ""} onValueChange={field.onChange}>
                     <SelectTrigger id="category" aria-invalid={!!errors.category}><SelectValue placeholder="選択してください" /></SelectTrigger>
                     <SelectContent>
                       {EXPENSE_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{EXPENSE_CATEGORY_LABEL[c]}</SelectItem>)}

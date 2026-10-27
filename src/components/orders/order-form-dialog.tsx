@@ -109,14 +109,15 @@ export function OrderFormDialog({
               {orderId ? "変更内容は配車ボードとドライバー画面にすぐ反映されます。" : "ドライバーを選ぶと「配車済」として登録されます。後から配車ボードで割り当てることもできます。"}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit((v) => submit(v as unknown as OrderFormInput))} className="grid gap-4" noValidate>
+          {/* 送るのは入力値そのもの（サーバーで同じスキーマで検証する）。変換後の値（未割当 → null）を送ると検証に通らない */}
+          <form onSubmit={handleSubmit(() => submit(getValues()))} className="grid gap-4" noValidate>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="荷主" htmlFor="clientId" error={errors.clientId?.message} required className="sm:col-span-2">
                 <Controller
                   control={control}
                   name="clientId"
                   render={({ field }) => (
-                    <Select disabled={lockBilling} value={field.value || undefined} onValueChange={(v) => { onClientChange(v); field.onChange(v); }}>
+                    <Select disabled={lockBilling} value={field.value ?? ""} onValueChange={(v) => { onClientChange(v); field.onChange(v); }}>
                       <SelectTrigger id="clientId" aria-invalid={!!errors.clientId}><SelectValue placeholder="荷主を選択" /></SelectTrigger>
                       <SelectContent>
                         {options.clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
@@ -258,7 +259,7 @@ export function OrderFormDialog({
             <Button
               variant="default"
               disabled={submitting}
-              onClick={() => handleSubmit((v) => submit(v as unknown as OrderFormInput, true))()}
+              onClick={() => handleSubmit(() => submit(getValues(), true))()}
             >
               {submitting && <Loader2 className="animate-spin" aria-hidden />}
               重複を承知で保存

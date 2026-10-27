@@ -2,12 +2,18 @@ import postgres, { type Sql } from "postgres";
 import { randomUUID } from "node:crypto";
 import { generateDemoData, type DemoDataset } from "@/lib/demo/generator";
 import { loadDataset } from "@/lib/demo/load";
+import { DB_TYPES } from "@/lib/db/types";
 
 export const TEST_DATABASE_URL =
   process.env.TEST_DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/dm";
 
 export function connect(): Sql {
   return postgres(TEST_DATABASE_URL, { max: 4, prepare: false, onnotice: () => {} });
+}
+
+/** アプリと同じ型変換（numeric → number など）の接続。src/lib/data の関数をテストするときに使う */
+export function connectTyped(): Sql {
+  return postgres(TEST_DATABASE_URL, { max: 4, prepare: false, onnotice: () => {}, types: DB_TYPES });
 }
 
 export type TestTenant = {

@@ -212,11 +212,4 @@ export const BUSINESS_PREFIXES = [
   "ほしの", "すみれ", "ゆうき", "なぎさ", "わかば", "ことぶき", "やまびこ", "たちばな", "ふたば", "あけぼの",
 ] as const;
 
-export const FAILURE_REASONS = [
-  "受取人不在のため持ち戻り",
-  "納品先の受付時間外のため持ち戻り",
-  "荷姿不良のため受取拒否",
-  "住所不明のため荷主へ確認中",
-] as const;
-
-export const CANCEL_REASONS = ["荷主都合によるキャンセル", "納品日の変更", "発注内容の誤り"] as const;
+export { FAILURE_REASONS, CANCEL_REASONS } from "@/lib/domain/reasons";

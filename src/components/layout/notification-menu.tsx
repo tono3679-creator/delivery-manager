@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useTransition } from "react";
-import { Bell, CircleCheckBig, CircleX, UserCheck, Info } from "lucide-react";
+import { Bell, CircleCheckBig, CircleX, UserCheck, UserMinus, Clock, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -20,8 +20,12 @@ export type NotificationItem = {
   read: boolean;
 };
 
-const ICON: Record<string, typeof Bell> = { delivered: CircleCheckBig, failed: CircleX, assigned: UserCheck };
-const COLOR: Record<string, string> = { delivered: "text-success", failed: "text-destructive", assigned: "text-brand" };
+const ICON: Record<string, typeof Bell> = {
+  delivered: CircleCheckBig, failed: CircleX, assigned: UserCheck, unassigned: UserMinus, rescheduled: Clock,
+};
+const COLOR: Record<string, string> = {
+  delivered: "text-success", failed: "text-destructive", assigned: "text-brand", unassigned: "text-muted-foreground", rescheduled: "text-warning-strong",
+};
 
 export function NotificationMenu({
   items, unreadCount, audience,

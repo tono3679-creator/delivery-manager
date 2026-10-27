@@ -2,6 +2,7 @@ import "server-only";
 import postgres, { type Sql, type TransactionSql } from "postgres";
 import { serverEnv } from "@/lib/env";
 import { runAsUser } from "./rls";
+import { DB_TYPES } from "./types";
 
 declare global {
   var __dmSql: Sql | undefined;
@@ -18,12 +19,7 @@ export function db(): Sql {
     idle_timeout: 20,
     connect_timeout: 10,
     onnotice: () => {},
-    types: {
-      // numeric（金額）は文字列ではなく数値で受け取る。円単位の整数なので誤差は出ない
-      numeric: { to: 1700, from: [1700], serialize: (v: number) => String(v), parse: (v: string) => Number(v) },
-      // bigint（count の結果）も数値で受け取る
-      bigint: { to: 20, from: [20], serialize: (v: number) => String(v), parse: (v: string) => Number(v) },
-    },
+    types: DB_TYPES,
   });
   return globalThis.__dmSql;
 }

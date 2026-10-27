@@ -33,9 +33,10 @@ export function AdminHeader({
           <SidebarBody companyName={companyName} onNavigate={() => setOpen(false)} />
         </SheetContent>
       </Sheet>
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-base font-semibold sm:text-lg">{titleFor(pathname)}</div>
-        <div className="hidden text-xs text-muted-foreground sm:block">{today}</div>
+      {/* 画面名は各ページの見出し（h1）に任せ、ここには日付と会社名を出す */}
+      <div className="min-w-0 flex-1" aria-label={titleFor(pathname)}>
+        <div className="truncate text-sm font-semibold tabular sm:text-base">{today}</div>
+        <div className="truncate text-xs text-muted-foreground">{companyName}</div>
       </div>
       <RealtimeIndicator className="hidden md:flex" />
       <NotificationMenu items={notifications} unreadCount={unreadCount} audience="admin" />

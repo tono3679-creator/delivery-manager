@@ -110,14 +110,14 @@ npm run dev                     # http://localhost:3000
 ```bash
 npm run typecheck
 npm run lint
-npm test            # 単体テスト・DB テスト（172件）
+npm test            # 単体テスト・DB テスト（185件）
 npm run test:e2e    # ブラウザでの E2E テスト（PC 9件・スマートフォン 5件）
 ```
 
 | 種類 | 主な内容 |
 | --- | --- |
 | DB テスト | 管理者とドライバー・会社間の権限分離（RLS と表の権限）、ステータス遷移、画面間の数字の一致、マスタと請求のルール、CSV 入出力、通知、同時編集、デモデータの整合性 |
-| 単体テスト | ステータス遷移、配車ボードの配置計算、CSV の解析、入力チェック、CSP、デモデータの配車（予定が重ならない） |
+| 単体テスト | ステータス遷移、配車ボードの配置計算、CSV の解析、入力チェック、CSP、デモデータの配車（予定が重ならない）、公開環境のセットアップ（接続情報の確認・ログイン用アカウントの作成） |
 | E2E テスト | 案件の登録・編集・削除、配車ボードでの割り当て、ドライバーのステータス更新と売上への反映、権限（未ログイン・ドライバー・他のドライバーの案件）、CSV の書き出しと取り込み、スマートフォンのメニュー操作と横はみ出し |
 
 E2E テストはテストごとに専用のデモ会社を作り、終わったら削除します。画面で JavaScript のエラー（CSP の違反を含む）が出たテストは失敗にします。GitHub Actions では、型チェック・Lint・マイグレーションとデモデータの検証・単体テストと DB テスト・ビルド・E2E テスト（ビルドしたアプリを `next start` で起動）を順に実行します。
@@ -128,11 +128,20 @@ E2E テストはテストごとに専用のデモ会社を作り、終わった�
 
 ### 1. Supabase
 
-1. プロジェクトを作成する（リージョンは東京 `ap-northeast-1` を推奨）
+1. プロジェクトを作成する（リージョンは東京 `ap-northeast-1` を推奨）。DB のパスワードは控えておく
 2. Authentication → Sign In / Providers で **Anonymous sign-ins** を有効にする（デモ体験に使用）。公開する場合は CAPTCHA かレート制限の設定を推奨
-3. マイグレーションを適用する：`supabase link --project-ref <ID>` → `supabase db push`
-4. **Data API を無効にする（推奨）**：このアプリはサーバーから DB に直接接続し、Data API（PostgREST）を使いません。無効にしても動作に影響はなく、公開キーで DB を直接操作される経路をなくせます。有効のままでも、RLS と最小限の表の権限で守られます
-5. デモデータを投入する（手元の PC から）：`.env.local` に `DATABASE_URL` と `SUPABASE_SERVICE_ROLE_KEY` を設定して `npm run db:seed` → `npm run db:verify`。サービスロールキーはログイン用アカウントの作成にだけ使い、Vercel には設定しません
+3. **Data API を無効にする（推奨）**：このアプリはサーバーから DB に直接接続し、Data API（PostgREST）を使いません。無効にしても動作に影響はなく、公開キーで DB を直接操作される経路をなくせます。有効のままでも、RLS と最小限の表の権限で守られます
+4. GitHub のリポジトリの Settings → Secrets and variables → Actions に、次の Secrets を登録する
+
+| Secret | 内容 |
+| --- | --- |
+| `SUPABASE_DB_URL` | Supabase の **Connect → Session pooler** の接続文字列（ポート 5432）。`[YOUR-PASSWORD]` は DB のパスワードに置き換える。直接接続（`db.….supabase.co`）は IPv6 専用のため GitHub Actions から接続できない |
+| `SUPABASE_SECRET_KEY` | Project Settings → API Keys の **Secret key**（`sb_secret_…`）。見本の会社のログイン用アカウントの作成にだけ使い、Vercel には設定しない |
+| `SEED_LOGIN_PASSWORD` | 見本の会社にログインするアカウント（`admin@minato-express.example`・`driver@minato-express.example`）のパスワード。8文字以上。公開環境では README の既定パスワードは使えない |
+
+5. Actions タブの **「公開環境の DB セットアップ」** を Run workflow で実行する（`.github/workflows/production-db.yml`）。登録した値の確認 → マイグレーションの適用（`supabase db push`）→ 見本の会社とログイン用アカウントの作成 → 整合性チェックを順に行います。何度実行しても同じ状態になります
+
+手元の PC から行う場合は、`supabase db push --db-url "<Session pooler の接続文字列>"` のあと、`.env.local` に `DATABASE_URL`・`NEXT_PUBLIC_SUPABASE_URL`・`SUPABASE_SERVICE_ROLE_KEY`（Secret key）・`SEED_ADMIN_PASSWORD`・`SEED_DRIVER_PASSWORD` を設定して `npm run db:seed` → `npm run db:verify` を実行します。
 
 ### 2. Vercel
 
@@ -141,14 +150,15 @@ E2E テストはテストごとに専用のデモ会社を作り、終わった�
 
 | 変数 | 内容 | 公開範囲 |
 | --- | --- | --- |
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase の URL | ブラウザに公開してよい |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase の公開キー | ブラウザに公開してよい |
-| `DATABASE_URL` | 接続プーラー（Transaction モード・ポート 6543）の接続文字列 | **サーバー専用** |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase の URL（`https://<プロジェクト ID>.supabase.co`） | ブラウザに公開してよい |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase の Publishable key（`sb_publishable_…`。従来の anon キーでも可） | ブラウザに公開してよい |
+| `DATABASE_URL` | Supabase の **Connect → Transaction pooler** の接続文字列（ポート 6543、パスワード入り） | **サーバー専用** |
 | `CRON_SECRET` | 期限切れデモの削除（Vercel Cron）の認証用。長いランダムな文字列 | **サーバー専用** |
 | `DEMO_MAX_ACTIVE` | 同時に存在できるデモの数（任意・既定 30。1環境あたり約 12MB） | サーバー専用 |
 | `NEXT_PUBLIC_MAP_TILE_URL` | 地図タイルの URL（任意。アクセスの多い本番では契約したタイル配信を推奨） | ブラウザに公開してよい |
 
 3. デプロイ後、ログイン画面から「管理者として体験」を開いて確認する。期限切れのデモは毎日 3:00（日本時間）に削除されます（`vercel.json` の `crons`）
+4. Actions タブの **「公開環境の E2E テスト」** に公開した URL を入力して実行すると、公開環境に対して E2E テスト（PC・スマートフォン）を行えます（`.github/workflows/production-e2e.yml`）。テストで作ったデモ会社は終わりに削除します
 
 ## 地図について
 

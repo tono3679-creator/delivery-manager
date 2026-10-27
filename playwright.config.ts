@@ -8,9 +8,12 @@ import { defineConfig, devices } from "@playwright/test";
  *
  *   npm run test:e2e                               … next dev で起動して実行
  *   E2E_COMMAND="npx next start -p 3100" npm run test:e2e   … ビルド済みのアプリで実行（CI）
+ *   E2E_BASE_URL=https://… DATABASE_URL=… npx playwright test  … 公開環境に対して実行（アプリは起動しない。
+ *                                                              DATABASE_URL はテストで作ったデモ会社の片付けに使う）
  */
 const PORT = 3100;
-const BASE_URL = `http://localhost:${PORT}`;
+const EXTERNAL_URL = process.env.E2E_BASE_URL?.replace(/\/$/, "");
+const BASE_URL = EXTERNAL_URL || `http://localhost:${PORT}`;
 const DATABASE_URL = process.env.DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/dm";
 
 export default defineConfig({
@@ -46,7 +49,7 @@ export default defineConfig({
       grep: /@mobile|@both/,
     },
   ],
-  webServer: [
+  webServer: EXTERNAL_URL ? undefined : [
     {
       command: "npx tsx scripts/dev/local-auth-server.ts",
       url: "http://localhost:54321/auth/v1/health",

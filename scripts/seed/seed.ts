@@ -24,12 +24,26 @@ export function showcaseCompanyId(seed: number): string {
   return `00000000-0000-4000-8000-0000${hex}`;
 }
 
+/**
+ * ログイン用アカウントのパスワード。
+ * 既定値は README に載っていて誰でも分かるため、Supabase に投入するとき（サービスロールキーがあるとき）は使わない。
+ */
+function loginPassword(name: string, localDefault: string): string {
+  const value = process.env[name];
+  if (value) return value;
+  if (process.env.SUPABASE_SERVICE_ROLE_KEY) throw new Error(`${name} を設定してください（公開環境では既定のパスワードを使いません）`);
+  return localDefault;
+}
+
 async function main() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL を設定してください");
   const seed = Number(arg("seed") ?? DEFAULT_DEMO_SEED);
   const now = arg("now") ? new Date(arg("now") as string) : new Date();
   if (!Number.isFinite(seed) || Number.isNaN(now.getTime())) throw new Error("--seed / --now の値が不正です");
+  // データを入れる前に確かめる
+  const adminPassword = loginPassword("SEED_ADMIN_PASSWORD", "demo-admin-2026");
+  const driverPassword = loginPassword("SEED_DRIVER_PASSWORD", "demo-driver-2026");
 
   const sql = postgres(url, { max: 1, prepare: false, onnotice: () => {} });
   const companyId = showcaseCompanyId(seed);
@@ -39,11 +53,11 @@ async function main() {
 
   const admin = await createLoginUser(sql, {
     email: process.env.SEED_ADMIN_EMAIL ?? "admin@minato-express.example",
-    password: process.env.SEED_ADMIN_PASSWORD ?? "demo-admin-2026",
+    password: adminPassword,
   });
   const driver = await createLoginUser(sql, {
     email: process.env.SEED_DRIVER_EMAIL ?? "driver@minato-express.example",
-    password: process.env.SEED_DRIVER_PASSWORD ?? "demo-driver-2026",
+    password: driverPassword,
   });
   await sql`
     insert into public.profiles (id, company_id, role, driver_id, display_name)

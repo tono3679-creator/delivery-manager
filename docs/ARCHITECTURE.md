@@ -195,6 +195,12 @@
 - PC（1280px）とスマートフォン（390px）で実行する。テストごとに「体験」ボタンから専用のデモ会社を作り、終わったら削除する（DB の整合性チェックの対象に残さない）
 - 画面で JavaScript のエラー（CSP の違反を含む）が出たら失敗にする。地図タイルは灰色の画像に差し替え、外部のサーバーに依存しない
 - CI ではビルドしたアプリを `next start` で起動して実行し、失敗したときはトレースとスクリーンショットを保存する
+- `E2E_BASE_URL` を指定すると、アプリを起動せずにその URL（公開環境）に対して実行する（`.github/workflows/production-e2e.yml`）
+
+### 公開環境のセットアップ（`.github/workflows/production-db.yml`）
+- 開発環境から Supabase に接続できない前提で、DB の構築は GitHub Actions から手動で実行する。接続情報・Secret key・ログイン用パスワードは GitHub の Secrets にだけ置き、ログにもチャットにも出さない
+- 登録値の確認（`scripts/deploy/`。直接接続や Transaction pooler、既定パスワードを理由付きで弾く）→ `supabase db push` → 見本の会社とログイン用アカウントの作成 → 整合性チェック。何度実行しても同じ状態になる
+- 見本の会社のパスワードは README に載っている既定値を公開環境では使わない（`SUPABASE_SERVICE_ROLE_KEY` があるときは未設定ならエラー）。新しい Secret key（`sb_secret_…`）は JWT ではないので `apikey` ヘッダーだけで送る
 
 ## デモ環境
 

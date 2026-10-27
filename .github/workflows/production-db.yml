@@ -1,0 +1,56 @@
+name: 公開環境の DB セットアップ
+
+# Supabase の DB にマイグレーションを適用し、見本の会社（ログイン用アカウント付き）を作って、整合性を確かめる。
+# Actions タブ → このワークフロー → Run workflow で手動実行する。何度実行しても同じ状態になる
+# （適用済みのマイグレーションは飛ばし、見本の会社は「今」を基準に作り直す）。
+#
+# 事前にリポジトリの Secrets（Settings → Secrets and variables → Actions）へ登録する：
+#   SUPABASE_DB_URL      Supabase の Connect → Session pooler の接続文字列（ポート 5432）。[YOUR-PASSWORD] は DB のパスワードに置き換える
+#   SUPABASE_SECRET_KEY  Project Settings → API Keys の Secret key（sb_secret_…）。ログイン用アカウントの作成にだけ使う
+#   SEED_LOGIN_PASSWORD  見本の会社にログインするアカウント（管理者・ドライバー）のパスワード（8文字以上）
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-db
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: 登録された Secrets の確認
+        run: npx tsx scripts/deploy/check-env.ts
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          SEED_LOGIN_PASSWORD: ${{ secrets.SEED_LOGIN_PASSWORD }}
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.122.0
+      - name: マイグレーションの適用
+        run: supabase db push --db-url "$SUPABASE_DB_URL" --yes
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      - name: 見本の会社とログイン用アカウントの作成
+        run: npm run db:seed
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          SEED_ADMIN_PASSWORD: ${{ secrets.SEED_LOGIN_PASSWORD }}
+          SEED_DRIVER_PASSWORD: ${{ secrets.SEED_LOGIN_PASSWORD }}
+      - name: デモデータの整合性チェック
+        run: npm run db:verify
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}

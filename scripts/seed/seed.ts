@@ -13,6 +13,7 @@ import path from "node:path";
 import postgres, { type Sql } from "postgres";
 import { DEFAULT_DEMO_SEED, generateDemoData } from "@/lib/demo/generator";
 import { loadDataset } from "@/lib/demo/load";
+import { toPostgresJsUrl } from "@/lib/db/url";
 import { createLoginUser, seedPasswords } from "./users";
 
 function arg(name: string): string | undefined {
@@ -69,7 +70,7 @@ async function main() {
   // データを入れる前に確かめる
   const passwords = seedPasswords(process.env, url);
 
-  const sql = postgres(url, { max: 1, prepare: false, onnotice: () => {} });
+  const sql = postgres(toPostgresJsUrl(url), { max: 1, prepare: false, onnotice: () => {} });
   try {
     await seedShowcase(sql, { seed, now, passwords });
   } finally {

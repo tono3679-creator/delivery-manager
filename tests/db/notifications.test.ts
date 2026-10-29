@@ -42,11 +42,15 @@ const noticesFor = (where: { orderId?: string; driverId?: string; kind?: string;
      ${where.kind ? sql`and kind = ${where.kind}` : sql``}
    order by created_at`;
 
-/** 明日以降の配車済みの案件（担当ドライバーつき）を1件 */
-async function assignedOrder(driverId?: string, offset = 0) {
+/**
+ * 配車済みの案件（担当ドライバーつき）を1件。既定では、まだ遅れる心配のない明日以降のもの。
+ * anyTime のときは配送予定を問わない（配送予定に関係しないテストで、時刻によって候補が無くならないように）。
+ */
+async function assignedOrder(driverId?: string, offset = 0, { anyTime = false } = {}) {
   const [o] = await sql<{ id: string; order_no: string; driver_id: string; delivery_name: string }[]>`
     select id, order_no, driver_id, delivery_name from delivery_orders
-     where company_id = ${a.companyId} and status = 'assigned' and delivery_at > now() + interval '1 day'
+     where company_id = ${a.companyId} and status = 'assigned'
+       ${anyTime ? sql`` : sql`and delivery_at > now() + interval '1 day'`}
        ${driverId ? sql`and driver_id = ${driverId}` : sql``}
      order by order_no offset ${offset} limit 1`;
   expect(o).toBeDefined();
@@ -120,7 +124,7 @@ describe("キャンセル・削除の通知", () => {
 
 describe("配送メモの通知", () => {
   it("ドライバーのメモは管理者へ、管理者のメモは担当ドライバーへ届く", async () => {
-    const order = await assignedOrder(a.driverId);
+    const order = await assignedOrder(a.driverId, 0, { anyTime: true });
     const start = new Date(Date.now() - 1000);
     await asDriverA((tx) => tx`
       insert into delivery_notes (company_id, order_id, author_id, author_name, body)

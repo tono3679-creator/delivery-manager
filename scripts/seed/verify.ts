@@ -4,6 +4,7 @@
  */
 import path from "node:path";
 import postgres, { type Sql } from "postgres";
+import { toPostgresJsUrl } from "../../src/lib/db/url";
 import { INTEGRITY_CHECKS } from "./checks";
 
 /** すべてのチェックを実行し、違反のあったチェックの数を返す */
@@ -21,7 +22,7 @@ export async function verifyIntegrity(sql: Sql, log: (line: string) => void = co
 async function main() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL を設定してください");
-  const sql = postgres(url, { max: 1, prepare: false, onnotice: () => {} });
+  const sql = postgres(toPostgresJsUrl(url), { max: 1, prepare: false, onnotice: () => {} });
   const failed = await verifyIntegrity(sql).finally(() => sql.end());
   if (failed > 0) process.exit(1);
 }

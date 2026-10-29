@@ -1,4 +1,5 @@
-import { test as base, expect, type BrowserContext, type Locator, type Page } from "@playwright/test";
+import { createHash } from "node:crypto";
+import { test as base, expect, type Locator, type Page } from "@playwright/test";
 import postgres, { type Sql } from "postgres";
 
 /** 地図タイルの代わりに返す 1px の灰色 PNG（外部の地図サーバーに依存しない） */
@@ -17,18 +18,21 @@ type Fixtures = {
 };
 
 type WorkerFixtures = {
-  /** テストで作ったデモ会社を片付けるための DB 接続（ワーカーごとに1本） */
-  db: Sql;
+  /**
+   * テストで作ったデモ会社を片付けるための DB 接続（ワーカーごとに1本）。
+   * 公開環境に対して実行するとき（E2E_BASE_URL があり DATABASE_URL がないとき）は null で、画面の「デモを終了する」で片付ける。
+   */
+  db: Sql | null;
 };
+
+/** ローカルの DB（E2E_BASE_URL がなければ、DATABASE_URL が無くてもローカルの既定の DB を使う） */
+export const E2E_DATABASE_URL = process.env.DATABASE_URL ?? (process.env.E2E_BASE_URL ? null : "postgres://postgres:postgres@localhost:5432/dm");
 
 export const test = base.extend<Fixtures, WorkerFixtures>({
   db: [
     async ({}, provide) => {
-      const sql = postgres(process.env.DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/dm", {
-        max: 1,
-        prepare: false,
-        onnotice: () => {},
-      });
+      if (!E2E_DATABASE_URL) return provide(null);
+      const sql = postgres(E2E_DATABASE_URL, { max: 1, prepare: false, onnotice: () => {} });
       await provide(sql);
       await sql.end();
     },
@@ -53,37 +57,53 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
   adminPage: async ({ page, db }, provide) => {
     await startDemo(page, "admin");
     await provide(page);
-    await removeDemo(db, page.context());
+    await removeDemo(db, page);
   },
   driverPage: async ({ page, db }, provide) => {
     await startDemo(page, "driver");
     await provide(page);
-    await removeDemo(db, page.context());
+    await removeDemo(db, page);
   },
 });
 
 /**
  * テストで作ったデモ会社と一時ユーザーを削除する（期限切れのデモの削除と同じ）。
  * テストで登録した案件が DB に残ると、デモデータの整合性チェック（npm run db:verify・DB テスト）の対象になるため。
+ * DB に接続しないとき（公開環境）は、画面の「デモを終了する」で削除する。
  */
-async function removeDemo(db: Sql, context: BrowserContext) {
-  const userId = await currentUserId(context);
+async function removeDemo(db: Sql | null, page: Page) {
+  if (!db) {
+    if (!(await sessionToken(page))) return;
+    await endDemoFromMenu(page);
+    return;
+  }
+  const userId = await currentUserId(db, page);
   if (!userId) return;
   await db`delete from companies where is_demo and demo_owner = ${userId}`;
   await db`delete from auth.users where id = ${userId} and is_anonymous`;
 }
 
-/** ログイン中のユーザー ID（Supabase の認証 Cookie のアクセストークンから読む） */
-async function currentUserId(context: BrowserContext): Promise<string | null> {
-  const chunks = (await context.cookies())
-    .filter((c) => /^sb-.+-auth-token(\.\d+)?$/.test(c.name))
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-  if (chunks.length === 0) return null;
-  const raw = chunks.map((c) => c.value).join("");
-  const json = raw.startsWith("base64-") ? Buffer.from(raw.slice(7), "base64url").toString("utf8") : decodeURIComponent(raw);
-  const token = (JSON.parse(json) as { access_token?: string }).access_token;
+/** ログインの Cookie（dm_session）の値 */
+async function sessionToken(page: Page): Promise<string | null> {
+  return (await page.context().cookies()).find((c) => c.name === "dm_session")?.value ?? null;
+}
+
+/** ログイン中のユーザー ID（Cookie の値の SHA-256 で DB のセッションを探す。アプリと同じ方法） */
+export async function currentUserId(db: Sql, page: Page): Promise<string | null> {
+  const token = await sessionToken(page);
   if (!token) return null;
-  return (JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8")) as { sub?: string }).sub ?? null;
+  const [row] = await db<{ user_id: string }[]>`
+    select user_id from auth.sessions where token_hash = ${createHash("sha256").update(token).digest("hex")}`;
+  return row?.user_id ?? null;
+}
+
+/** ユーザーメニューの「デモを終了する」（デモのデータも削除してログイン画面へ戻る） */
+export async function endDemoFromMenu(page: Page) {
+  // 開いたままのダイアログなどを閉じるため、トップ（管理者はダッシュボード、ドライバーは当日の一覧）を開き直す
+  await page.goto("/");
+  await page.getByRole("button", { name: "ユーザーメニュー" }).first().click();
+  await page.getByRole("menuitem", { name: "デモを終了する" }).click();
+  await page.waitForURL(/\/login$/);
 }
 
 export { expect };

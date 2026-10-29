@@ -1,42 +1,23 @@
-import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { buildCsp, createNonce } from "@/lib/security/csp";
-import { supabasePublishableKey, supabaseUrl } from "@/lib/supabase/config";
 
 const PUBLIC_PATHS = ["/login", "/api/cron"];
+/** src/lib/session.ts と同じ（proxy から DB には問い合わせない） */
+const SESSION_COOKIE = "dm_session";
+const SESSION_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 
 /**
  * すべてのページの前に動く処理。
  *   1. リクエストごとの nonce で Content Security Policy を付ける（Next.js が自分のスクリプトに nonce を付ける）
- *   2. Supabase のセッション Cookie を更新し、未ログインならログイン画面へ
+ *   2. ログインの Cookie が無ければログイン画面へ（API は 401）。
+ *      Cookie が本物か・権限があるかは、各画面・処理がサーバーで DB を見て確かめる（src/lib/auth.ts）
  */
-export async function proxy(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const csp = buildCsp(createNonce(), { dev: process.env.NODE_ENV === "development" });
-  // Cookie を更新したあとのリクエストヘッダーに CSP を加えて次へ渡す
-  const next = () => {
-    const headers = new Headers(request.headers);
-    headers.set("content-security-policy", csp);
-    return NextResponse.next({ request: { headers } });
-  };
-
-  let response = next();
-  const supabase = createServerClient(supabaseUrl, supabasePublishableKey, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
-      },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = next();
-        cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
-      },
-    },
-  });
-
-  const { data } = await supabase.auth.getClaims();
   const path = request.nextUrl.pathname;
   const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}/`));
-  if (!data?.claims && !isPublic) {
+  const token = request.cookies.get(SESSION_COOKIE)?.value;
+  if (!isPublic && !(token && SESSION_TOKEN_PATTERN.test(token))) {
     // API は画面へ移動させず、401 を返す
     if (path.startsWith("/api/")) {
       return NextResponse.json({ error: "ログインしてください" }, { status: 401, headers: { "content-security-policy": csp } });
@@ -46,6 +27,10 @@ export async function proxy(request: NextRequest) {
     url.search = "";
     return NextResponse.redirect(url);
   }
+  // リクエストヘッダーに CSP を加えて次へ渡す（Next.js が nonce を読む）
+  const headers = new Headers(request.headers);
+  headers.set("content-security-policy", csp);
+  const response = NextResponse.next({ request: { headers } });
   response.headers.set("content-security-policy", csp);
   return response;
 }

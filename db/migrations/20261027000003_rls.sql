@@ -136,5 +136,11 @@ create policy audit_admin_select on public.audit_logs for select to authenticate
 create policy audit_insert on public.audit_logs for insert to authenticated
   with check (company_id = (select app.current_company_id()) and actor_id = (select auth.uid()));
 
--- Realtime（Supabase Realtime は購読者の RLS を適用して変更を配信する）
-alter publication supabase_realtime add table public.delivery_orders, public.notifications;
+-- Realtime（Supabase Realtime は購読者の RLS を適用して変更を配信する）。
+-- 配信の仕組み（publication）がある環境でだけ登録する（Neon・ローカルでは画面が定期的に取り直す）
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    alter publication supabase_realtime add table public.delivery_orders, public.notifications;
+  end if;
+end $$;

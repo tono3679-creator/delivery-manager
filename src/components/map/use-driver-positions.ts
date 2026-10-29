@@ -1,12 +1,13 @@
 "use client";
 import { useEffect, useState } from "react";
 import type { DriverPositions } from "@/lib/domain/driver-position";
+import { onResume, shouldPoll } from "@/lib/hooks/idle";
 
 /** 取り直す間隔（ドライバーは1分ごとに送るので、遅れは最大で1分半ほど） */
 const POLL_MS = 20_000;
 
 /**
- * ドライバーの現在地を定期的に取り直す（画面が隠れている間は取らない）。
+ * ドライバーの現在地を定期的に取り直す（画面が隠れている間・10分以上操作がない間は取らない）。
  * サーバーで描画した値（initial）と、取り直した値のうち新しいほうを返す。
  */
 export function useDriverPositions(initial: DriverPositions | null, enabled: boolean): DriverPositions | null {
@@ -16,7 +17,7 @@ export function useDriverPositions(initial: DriverPositions | null, enabled: boo
     if (!enabled) return;
     let cancelled = false;
     const load = async () => {
-      if (document.hidden) return;
+      if (!shouldPoll()) return;
       try {
         const res = await fetch("/api/driver-positions", { cache: "no-store" });
         if (!res.ok) return;
@@ -31,9 +32,11 @@ export function useDriverPositions(initial: DriverPositions | null, enabled: boo
       if (!document.hidden) void load();
     };
     document.addEventListener("visibilitychange", onVisible);
+    const stopResume = onResume(() => void load());
     return () => {
       cancelled = true;
       clearInterval(timer);
+      stopResume();
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [enabled]);

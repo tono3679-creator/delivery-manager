@@ -12,7 +12,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const user = await requireAdmin();
   const notifications = await asUser(user.userId, (tx) => getNotifications(tx, "admin", null));
   return (
-    <RealtimeRefresher filter={{ column: "company_id", value: user.companyId }} syncedAt={new Date().toISOString()}>
+    <RealtimeRefresher syncedAt={new Date().toISOString()}>
       <LateAlertSync />
       <div className="min-h-dvh">
         <AdminSidebar companyName={user.companyName} />

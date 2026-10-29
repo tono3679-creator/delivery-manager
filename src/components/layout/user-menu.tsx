@@ -59,7 +59,8 @@ export function UserMenu({
         )}
         <DropdownMenuItem disabled={pending} onSelect={() => startTransition(() => signOut())}>
           <LogOut />
-          ログアウト
+          {/* デモはログアウトするとデータも削除する（もう一度入る手段がないため） */}
+          {isDemo ? "デモを終了する" : "ログアウト"}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

@@ -1,5 +1,4 @@
 import { mapTileUrl } from "@/lib/map-config";
-import { supabaseUrl } from "@/lib/supabase/config";
 
 /** URL のオリジン（地図タイルの {s} サブドメインはワイルドカードにする）。不正な値なら null */
 function originOf(url: string): string | null {
@@ -15,12 +14,10 @@ function originOf(url: string): string | null {
 /**
  * Content Security Policy。
  *   スクリプトはリクエストごとの nonce が付いたもの（とそこから読み込まれたもの）だけ実行する。
- *   通信先は自分のサイトと Supabase（認証・Realtime）、画像は地図タイルの配信元だけ許可する。
+ *   通信先は自分のサイトだけ、画像は地図タイルの配信元だけ許可する。
  *   ほかのサイトの iframe に埋め込ませない（クリックジャッキング対策）。
  */
 export function buildCsp(nonce: string, options: { dev: boolean }): string {
-  const supabase = originOf(supabaseUrl);
-  const realtime = supabase?.replace(/^http/, "ws");
   const tiles = originOf(mapTileUrl);
   const directives: Record<string, (string | null | undefined | false)[]> = {
     "default-src": ["'self'"],
@@ -29,7 +26,7 @@ export function buildCsp(nonce: string, options: { dev: boolean }): string {
     "style-src": ["'self'", "'unsafe-inline'"],
     "img-src": ["'self'", "data:", "blob:", tiles],
     "font-src": ["'self'", "data:"],
-    "connect-src": ["'self'", supabase, realtime],
+    "connect-src": ["'self'"],
     "worker-src": ["'self'", "blob:"],
     "object-src": ["'none'"],
     "base-uri": ["'self'"],

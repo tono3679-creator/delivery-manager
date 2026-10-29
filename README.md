@@ -39,7 +39,7 @@
 - 配車管理：時間 × ドライバーのボードでドラッグして割り当て、予定の重複は確認してから保存。地図表示に切り替えると、ドライバーの現在地（今どの案件に向かっているか）も確認できる
 - ドライバー・車両・荷主の管理：実績・担当車両・車検と保険の期限・荷主ごとの請求と未請求
 - 売上・分析：期間ごとの売上・経費・粗利益・遅延率、荷主別・ドライバー別ランキング、前の期間との比較
-- 通知：ドライバーの完了・失敗、遅延、メモをリアルタイムに受け取る
+- 通知：ドライバーの完了・失敗、遅延、メモを受け取る（画面は30秒ごとに自動で最新になる）
 - 設定：会社名・営業所、誰がいつ何を操作したかの操作履歴
 
 **ドライバー（スマートフォン）**
@@ -55,7 +55,8 @@
 | --- | --- | --- |
 | フレームワーク | Next.js 16（App Router・Server Actions）/ React 19 / TypeScript | MIT |
 | UI | Tailwind CSS 4 / shadcn/ui（Radix UI）/ lucide-react / sonner | MIT・ISC |
-| DB・認証・リアルタイム | Supabase（PostgreSQL・Auth・Realtime）/ postgres.js | MIT・Unlicense |
+| DB | PostgreSQL（公開環境は Neon）/ postgres.js | PostgreSQL License・MIT・Unlicense |
+| ログイン | アプリ内で実装（Node.js 標準の scrypt・HttpOnly Cookie のセッション） | — |
 | グラフ・地図 | Recharts / Leaflet + OpenStreetMap | MIT・BSD-2-Clause（地図データ © OpenStreetMap contributors, ODbL） |
 | フォーム・検証 | React Hook Form + Zod | MIT |
 | その他 | @dnd-kit/core（ドラッグ）/ Papa Parse（CSV） | MIT |
@@ -63,10 +64,12 @@
 
 依存関係は必要なものに絞っています（API キーや有料契約が必要なライブラリ・サービスは使っていません）。
 
+当初は Supabase（PostgreSQL・Auth・Realtime）で作り、公開の段階で Neon（PostgreSQL）＋アプリ内のログインに切り替えました。DB の設計（RLS・DB 関数・マイグレーション）はそのままで、`auth.uid()` などの関数を `db/bootstrap.sql` で用意しています。
+
 ## 設計のポイント
 
 - **権限は DB で守る**：すべての表に会社 ID を持たせ、PostgreSQL の RLS（行レベルセキュリティ）で会社・ドライバーごとにデータを分けています。サーバーは操作のたびにログインユーザーの権限で SQL を実行するため、画面の表示制御やサーバー処理に漏れがあっても他社・他のドライバーのデータには触れられません
-- **最小限の権限**：ブラウザに渡すのは Supabase の公開キーだけ。表の権限は必要な操作だけを許可し（会社は名前の変更のみ、操作履歴は追加のみなど）、ステータス更新や請求はルールを検証する DB 関数を経由させています
+- **最小限の権限**：ブラウザに渡す鍵や接続情報はありません（DB にはサーバーからだけ接続）。表の権限は必要な操作だけを許可し（会社は名前の変更のみ、操作履歴は追加のみなど）、ステータス更新や請求はルールを検証する DB 関数を経由させています
 - **数字が画面ごとに食い違わない**：売上・粗利益・遅延の定義は DB の集計関数に一本化し、ダッシュボード・分析・ドライバー・荷主の画面で同じ関数を使っています（DB テストで一致を確認）
 - **業務ルールを3か所で守る**：画面（選べないようにする）→ サーバー（理由を返す）→ DB（トリガーで拒否）。例：休職中のドライバーへの割り当て、集荷後の担当変更、請求済み案件の料金変更
 - **同時操作と通信の切断**：編集を開いた時点の「更新の印」と画面に表示していた状態を一緒に送り、その後に誰かが更新していたら上書きしません
@@ -87,20 +90,22 @@
 - 入力はすべて画面とサーバーで同じ Zod スキーマで検証。URL の検索条件も検証し、不正な値は無視します
 - Content Security Policy（nonce 付き）、`X-Frame-Options: DENY` などのセキュリティヘッダー
 - CSV の書き出しは表計算ソフトで数式として実行されないよう、`= + - @` で始まる値を無害化
-- 公開デモは訪問者ごとに別の会社を作るため、第三者が他の閲覧者のデータを変更できません。同時に存在できるデモの数に上限（`DEMO_MAX_ACTIVE`、既定 30）を設け、24時間後に自動削除します
+- ログイン：パスワードは scrypt（salt 付き）で保存し、照合は一定時間で比較します。利用者がいないときも同じだけ時間をかけ、登録の有無を応答時間から推測できないようにしています
+- セッション：Cookie には推測できないランダムな値（HttpOnly・SameSite=Lax・本番では Secure）を入れ、DB にはその SHA-256 だけを保存します。毎回 DB で確かめるので、ログアウトや期限切れはすぐに効きます
+- 回数の制限：ログインの失敗（同じメールアドレスで15分に10回、同じ接続元で15分に30回）とデモの作成（同じ接続元で1時間に30回、`DEMO_CREATE_LIMIT_PER_HOUR`）
+- 公開デモは訪問者ごとに別の会社を作るため、第三者が他の閲覧者のデータを変更できません。同時に存在できるデモの数に上限（`DEMO_MAX_ACTIVE`、既定 30）を設け、24時間後に自動削除します。「デモを終了する」を押すとその場で削除します
 - 案件の登録・配車・削除、マスタの変更、CSV の入出力、請求、設定の変更を操作履歴（`audit_logs`）に記録します
 
-## ローカルで動かす（Supabase なし）
+## ローカルで動かす
 
-PostgreSQL 16 と Node.js 22 があれば動きます。認証は Supabase Auth の代わりに同梱の簡易認証サーバーを使います。
+PostgreSQL 16 と Node.js 22 があれば動きます。
 
 ```bash
 npm install
-cp .env.example .env.local      # 末尾の「ローカル開発」の行を有効にする
-npm run db:local:reset          # DB 作成 → Supabase 互換のロール等 → マイグレーション
+cp .env.example .env.local      # DATABASE_URL をローカルの PostgreSQL に合わせる
+npm run db:local:reset          # DB 作成 → ロールと auth スキーマ（db/bootstrap.sql）→ マイグレーション
 npm run db:seed                 # デモデータ（Seed 値で再現可能）
 npm run db:verify               # データの整合性チェック（21項目）
-npm run dev:auth &              # 簡易認証サーバー（:54321）
 npm run dev                     # http://localhost:3000
 ```
 
@@ -111,55 +116,41 @@ npm run dev                     # http://localhost:3000
 ```bash
 npm run typecheck
 npm run lint
-npm test            # 単体テスト・DB テスト（206件）
-npm run test:e2e    # ブラウザでの E2E テスト（PC 12件・スマートフォン 6件）
+npm test            # 単体テスト・DB テスト（220件）
+npm run test:e2e    # ブラウザでの E2E テスト（PC 15件・スマートフォン 8件）
 ```
 
 | 種類 | 主な内容 |
 | --- | --- |
-| DB テスト | 管理者とドライバー・会社間の権限分離（RLS と表の権限）、ステータス遷移、画面間の数字の一致、マスタと請求のルール、CSV 入出力、通知、同時編集、デモデータの整合性、現在地の送信・停止と見える範囲 |
-| 単体テスト | ステータス遷移、配車ボードの配置計算、CSV の解析、入力チェック、CSP、デモデータの配車（予定が重ならない）、公開環境のセットアップ（接続情報の確認・ログイン用アカウントの作成）、デモ用の模擬位置の計算 |
-| E2E テスト | 案件の登録・編集・削除、配車ボードでの割り当て、ドライバーのステータス更新と売上への反映、権限（未ログイン・ドライバー・他のドライバーの案件）、CSV の書き出しと取り込み、スマートフォンのメニュー操作と横はみ出し、位置情報の共有から管理者の地図への表示 |
+| DB テスト | 管理者とドライバー・会社間の権限分離（RLS と表の権限）、ステータス遷移、画面間の数字の一致、マスタと請求のルール、CSV 入出力、通知、同時編集、デモデータの整合性、現在地の送信・停止と見える範囲、ログインの情報（セッション等）が利用者の権限から見えないこと、マイグレーションの再実行 |
+| 単体テスト | ステータス遷移、配車ボードの配置計算、CSV の解析、入力チェック、CSP、デモデータの配車（予定が重ならない）、パスワードの保存と照合、公開環境の設定の確認、デモ用の模擬位置の計算 |
+| E2E テスト | ログイン・ログアウト（ログアウトした Cookie が使えないこと）、デモの終了、案件の登録・編集・削除、配車ボードでの割り当て、ドライバーのステータス更新と売上への反映、権限（未ログイン・ドライバー・他のドライバーの案件）、CSV の書き出しと取り込み、スマートフォンのメニュー操作と横はみ出し、位置情報の共有から管理者の地図への表示、離席中の自動更新の停止 |
 
 E2E テストはテストごとに専用のデモ会社を作り、終わったら削除します。画面で JavaScript のエラー（CSP の違反を含む）が出たテストは失敗にします。GitHub Actions では、型チェック・Lint・マイグレーションとデモデータの検証・単体テストと DB テスト・ビルド・E2E テスト（ビルドしたアプリを `next start` で起動）を順に実行します。
 
-## デプロイ（Vercel + Supabase）
+## デプロイ（Vercel + Neon）
 
-> Supabase・Vercel のプランや利用規約（商用利用の可否、無料プランの制限）は、公開前にご確認ください。
+> Vercel・Neon のプランや利用規約（商用利用の可否、無料プランの制限）は、公開前にご確認ください。どちらも無料プラン（クレジットカード不要）で動きます。
 
-### 1. Supabase
+作業は Vercel の画面だけで完結します。DB の準備（マイグレーション・見本の会社の作成・整合性チェック）は、本番の公開（Production デプロイ）のたびにビルドの前で自動的に行います（`npm run vercel-build` → `scripts/deploy/vercel-build.ts`）。プレビュー（ブランチごとの公開）では DB を変更しません。
 
-1. プロジェクトを作成する（リージョンは東京 `ap-northeast-1` を推奨）。DB のパスワードは控えておく
-2. Authentication → Sign In / Providers で **Anonymous sign-ins** を有効にする（デモ体験に使用）。公開する場合は CAPTCHA かレート制限の設定を推奨
-3. **Data API を無効にする（推奨）**：このアプリはサーバーから DB に直接接続し、Data API（PostgREST）を使いません。無効にしても動作に影響はなく、公開キーで DB を直接操作される経路をなくせます。有効のままでも、RLS と最小限の表の権限で守られます
-4. GitHub のリポジトリの Settings → Secrets and variables → Actions に、次の Secrets を登録する
-
-| Secret | 内容 |
-| --- | --- |
-| `SUPABASE_DB_URL` | Supabase の **Connect → Session pooler** の接続文字列（ポート 5432）。`[YOUR-PASSWORD]` は DB のパスワードに置き換える。直接接続（`db.….supabase.co`）は IPv6 専用のため GitHub Actions から接続できない |
-| `SUPABASE_SECRET_KEY` | Project Settings → API Keys の **Secret key**（`sb_secret_…`）。見本の会社のログイン用アカウントの作成にだけ使い、Vercel には設定しない |
-| `SEED_LOGIN_PASSWORD` | 見本の会社にログインするアカウント（`admin@minato-express.example`・`driver@minato-express.example`）のパスワード。8文字以上。公開環境では README の既定パスワードは使えない |
-
-5. Actions タブの **「公開環境の DB セットアップ」** を Run workflow で実行する（`.github/workflows/production-db.yml`）。登録した値の確認 → マイグレーションの適用（`supabase db push`）→ 見本の会社とログイン用アカウントの作成 → 整合性チェックを順に行います。何度実行しても同じ状態になります
-
-手元の PC から行う場合は、`supabase db push --db-url "<Session pooler の接続文字列>"` のあと、`.env.local` に `DATABASE_URL`・`NEXT_PUBLIC_SUPABASE_URL`・`SUPABASE_SERVICE_ROLE_KEY`（Secret key）・`SEED_ADMIN_PASSWORD`・`SEED_DRIVER_PASSWORD` を設定して `npm run db:seed` → `npm run db:verify` を実行します。
-
-### 2. Vercel
-
-1. GitHub のリポジトリをインポートする（リージョンは `vercel.json` で東京 `hnd1` を指定済み）
-2. 環境変数を設定する
+1. Vercel で GitHub のリポジトリをインポートする。最初のデプロイは DB がまだないため、必要な設定を一覧にして失敗します
+2. プロジェクトの **Storage** から **Neon** を追加し（リージョンは Singapore、プランは Free）、このプロジェクトにつなぐ（Connect Project。環境は Production と Preview、Custom Prefix は空のまま）。`DATABASE_URL`・`DATABASE_URL_UNPOOLED` が自動で設定されます
+3. **Settings → Environment Variables** に次を追加する
 
 | 変数 | 内容 | 公開範囲 |
 | --- | --- | --- |
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase の URL（`https://<プロジェクト ID>.supabase.co`） | ブラウザに公開してよい |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase の Publishable key（`sb_publishable_…`。従来の anon キーでも可） | ブラウザに公開してよい |
-| `DATABASE_URL` | Supabase の **Connect → Transaction pooler** の接続文字列（ポート 6543、パスワード入り） | **サーバー専用** |
-| `CRON_SECRET` | 期限切れデモの削除（Vercel Cron）の認証用。長いランダムな文字列 | **サーバー専用** |
-| `DEMO_MAX_ACTIVE` | 同時に存在できるデモの数（任意・既定 30。1環境あたり約 12MB） | サーバー専用 |
+| `SEED_LOGIN_PASSWORD` | 見本の会社にログインするアカウント（`admin@minato-express.example`・`driver@minato-express.example`）のパスワード。12文字以上。README の既定パスワードは使えない | **サーバー専用** |
+| `CRON_SECRET` | 期限切れデモの削除（Vercel Cron）の認証用。16文字以上のランダムな文字列 | **サーバー専用** |
 | `NEXT_PUBLIC_MAP_TILE_URL` | 地図タイルの URL（任意。アクセスの多い本番では契約したタイル配信を推奨） | ブラウザに公開してよい |
 
-3. デプロイ後、ログイン画面から「管理者として体験」を開いて確認する。期限切れのデモは毎日 3:00（日本時間）に削除されます（`vercel.json` の `crons`）
-4. Actions タブの **「公開環境の E2E テスト」** に公開した URL を入力して実行すると、公開環境に対して E2E テスト（PC・スマートフォン）を行えます（`.github/workflows/production-e2e.yml`）。テストで作ったデモ会社は終わりに削除します
+4. **Deployments** から最新のデプロイを **Redeploy** する。ビルドのログに「DB の準備ができました」と出れば完了です
+5. ログイン画面から「管理者として体験」を開いて確認する。期限切れのデモは毎日 3:00（日本時間）に削除されます（`vercel.json` の `crons`）
+6. GitHub の Actions タブの **「公開環境の E2E テスト」** に公開した URL を入力して実行すると、公開環境に対して E2E テスト（PC・スマートフォン）を行えます（`.github/workflows/production-e2e.yml`）。テストで作ったデモは画面の「デモを終了する」で削除します。リポジトリの Secrets に `E2E_LOGIN_PASSWORD`（`SEED_LOGIN_PASSWORD` と同じ値）を登録すると、メールアドレスとパスワードでのログインも確かめます
+
+アプリのサーバー（Vercel Functions）は DB と同じシンガポール（`sin1`）で動かします（`vercel.json`）。Neon には東京のリージョンがないため、DB との往復を短くするほうを優先しています。
+
+Neon の無料プランは計算時間が月 100 CU 時間（最小の 0.25 CU なら約 400 時間）で、5 分間問い合わせがなければ DB が止まり、その間は計算時間を使いません。画面を開いたまま席を離れても DB が止まるよう、10 分操作がなければ自動更新（30秒ごとの再取得・現在地・遅延の確認）を止め、操作すると再開します。
 
 ## 地図について
 
@@ -179,10 +170,10 @@ E2E テストはテストごとに専用のデモ会社を作り、終わった�
 
 ## デモ環境の仕組み
 
-- 「体験」ボタンを押すと匿名ログインし、訪問者ごとに専用の配送会社をその場で生成します。他の閲覧者の操作は見えません
+- 「体験」ボタンを押すと一時的な利用者としてログインし、訪問者ごとに専用の配送会社をその場で生成します。他の閲覧者の操作は見えません
 - データは「今」を基準に作るので、いつ開いても稼働中の配送会社に見えます（過去6か月の実績・本日の進行中の配送・今後1週間の予定）
 - デモ会社でのみ、管理者 ⇔ ドライバーの画面を切り替えられます（切り替え後は DB の権限もドライバーになります）
-- 24時間後に自動で削除します。上限に達したときは期限切れのデモを先に片付け、それでも空きがなければ「しばらくしてから」と案内します
+- 24時間後に自動で削除します（ユーザーメニューの「デモを終了する」でその場で削除することもできます）。上限に達したときは期限切れのデモを先に片付け、それでも空きがなければ「しばらくしてから」と案内します
 
 ## 開発の経緯
 

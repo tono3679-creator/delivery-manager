@@ -3,7 +3,7 @@ import type { Sql, TransactionSql } from "postgres";
 /**
  * ログインユーザーとして SQL を実行する。
  * トランザクションの中でロールを authenticated に切り替え、JWT の内容（sub）を設定するので、
- * RLS と auth.uid() が Supabase の API 経由と同じように効く。
+ * RLS と auth.uid() がその利用者の権限で効く（アプリの処理は必ずここを通して DB を読み書きする）。
  */
 export async function runAsUser<T>(
   sql: Sql,

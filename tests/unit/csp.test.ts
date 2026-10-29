@@ -11,7 +11,7 @@ async function load(env: Record<string, string>) {
 
 describe("buildCsp", () => {
   it("スクリプトは nonce 付きのものだけ。本番では eval を許可しない", async () => {
-    const { buildCsp } = await load({ NEXT_PUBLIC_SUPABASE_URL: "https://abc.supabase.co" });
+    const { buildCsp } = await load({});
     const csp = buildCsp("NONCE", { dev: false });
     expect(csp).toContain("script-src 'self' 'nonce-NONCE' 'strict-dynamic';");
     expect(csp).not.toContain("unsafe-eval");
@@ -20,18 +20,15 @@ describe("buildCsp", () => {
     expect(buildCsp("N", { dev: true })).toContain("'unsafe-eval'");
   });
 
-  it("通信先は Supabase（https と Realtime の wss）、画像は地図タイルの配信元だけ", async () => {
-    const { buildCsp } = await load({
-      NEXT_PUBLIC_SUPABASE_URL: "https://abc.supabase.co",
-      NEXT_PUBLIC_MAP_TILE_URL: "https://{s}.tiles.example.com/{z}/{x}/{y}.png?key=xyz",
-    });
+  it("通信先は自分のサイトだけ、画像は地図タイルの配信元だけ", async () => {
+    const { buildCsp } = await load({ NEXT_PUBLIC_MAP_TILE_URL: "https://{s}.tiles.example.com/{z}/{x}/{y}.png?key=xyz" });
     const csp = buildCsp("N", { dev: false });
-    expect(csp).toContain("connect-src 'self' https://abc.supabase.co wss://abc.supabase.co;");
+    expect(csp).toContain("connect-src 'self';");
     expect(csp).toContain("img-src 'self' data: blob: https://*.tiles.example.com;");
   });
 
   it("設定が空でも壊れた値を出さない", async () => {
-    const { buildCsp } = await load({ NEXT_PUBLIC_SUPABASE_URL: "", NEXT_PUBLIC_MAP_TILE_URL: "" });
+    const { buildCsp } = await load({ NEXT_PUBLIC_MAP_TILE_URL: "" });
     const csp = buildCsp("N", { dev: false });
     expect(csp).toContain("connect-src 'self';");
     expect(csp).toContain("img-src 'self' data: blob: https://tile.openstreetmap.org;");

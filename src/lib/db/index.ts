@@ -10,7 +10,7 @@ declare global {
 
 /**
  * データベース接続（サーバー専用）。
- * Vercel からは Supabase の接続プーラー（Transaction モード）を使うため prepare: false。
+ * 公開環境では Neon の接続プーラー（PgBouncer の Transaction モード）を通すため prepare: false。
  */
 export function db(): Sql {
   globalThis.__dmSql ??= postgres(serverEnv.databaseUrl, {

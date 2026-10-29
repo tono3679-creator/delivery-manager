@@ -2,7 +2,10 @@ name: 公開環境の E2E テスト
 
 # 公開したサイトに対して、ブラウザでの E2E テスト（PC・スマートフォン）を実行する。
 # Actions タブ → このワークフロー → Run workflow で、公開した URL を入力して実行する。
-# テストごとに「体験」から専用のデモ会社を作り、終わったら削除する（削除に Secrets の SUPABASE_DB_URL を使う）。
+# テストごとに「体験」から専用のデモ会社を作り、終わったら画面の「デモを終了する」で削除する（DB の接続情報は使わない）。
+# 1回の実行で 20 個ほどデモを作るため、同じ接続元からのデモ作成の上限（1時間に 30 回）に当たらないよう、続けて実行しない。
+# リポジトリの Secrets に E2E_LOGIN_PASSWORD（Vercel に設定した SEED_LOGIN_PASSWORD と同じ値）があれば、
+# 見本の会社へのメールアドレスとパスワードでのログインも確かめる（無ければそのテストは飛ばす）。
 
 on:
   workflow_dispatch:
@@ -43,7 +46,7 @@ jobs:
       - name: ブラウザでの E2E テスト（PC・スマートフォン）
         run: npx playwright test
         env:
-          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+          E2E_LOGIN_PASSWORD: ${{ secrets.E2E_LOGIN_PASSWORD }}
       - name: E2E の結果（スクリーンショット・トレース）
         if: always()
         uses: actions/upload-artifact@v4

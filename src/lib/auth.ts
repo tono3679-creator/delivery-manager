@@ -3,7 +3,7 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { asUser, type Tx } from "@/lib/db";
 import type { AppRole } from "@/lib/domain/labels";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { readSession } from "@/lib/session";
 
 export type CurrentUser = {
   userId: string;
@@ -16,13 +16,8 @@ export type CurrentUser = {
   isAnonymous: boolean;
 };
 
-/** Supabase Auth のセッションを検証してユーザー ID を返す */
-export const getAuthUserId = cache(async (): Promise<{ id: string; isAnonymous: boolean } | null> => {
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.auth.getClaims();
-  if (error || !data?.claims?.sub) return null;
-  return { id: data.claims.sub, isAnonymous: Boolean(data.claims.is_anonymous) };
-});
+/** ログインのセッション（Cookie）を DB で確かめて、利用者 ID を返す */
+export const getAuthUserId = cache(async (): Promise<{ id: string; isAnonymous: boolean } | null> => readSession());
 
 /** ログイン中のユーザーと所属会社（未ログイン・未登録なら null） */
 export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {

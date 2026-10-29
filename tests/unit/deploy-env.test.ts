@@ -1,40 +1,72 @@
 import { describe, expect, it } from "vitest";
-import { checkLoginPassword, checkSecretKey, checkSupabaseDbUrl } from "../../scripts/deploy/supabase-env";
+import { checkProductionEnv } from "../../scripts/deploy/production-env";
+import { checkLoginPassword, isLocalDatabase, seedPasswords } from "../../scripts/seed/users";
 
-const REF = "abcdefghijklmnopqrst";
+const NEON = "postgresql://neondb_owner:secret@ep-cool-name-a1b2c3-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require";
+const NEON_UNPOOLED = NEON.replace("-pooler", "");
+const OK_ENV = {
+  DATABASE_URL: NEON,
+  DATABASE_URL_UNPOOLED: NEON_UNPOOLED,
+  SEED_LOGIN_PASSWORD: "a-long-enough-passphrase",
+  CRON_SECRET: "0123456789abcdef0123",
+};
 
-describe("公開環境の接続情報の確認", () => {
-  it("Session pooler の接続文字列から Supabase の URL を求める", () => {
-    const r = checkSupabaseDbUrl(`postgresql://postgres.${REF}:p%40ss@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres`);
-    expect(r).toEqual({ ok: true, projectRef: REF, supabaseUrl: `https://${REF}.supabase.co` });
+describe("公開環境（Vercel）の環境変数の確認", () => {
+  it("Neon の接続文字列・パスワード・CRON_SECRET がそろっていれば問題なし", () => {
+    expect(checkProductionEnv(OK_ENV)).toEqual([]);
+  });
+
+  it("足りないものを、何をすればよいかと一緒にすべて挙げる", () => {
+    const errors = checkProductionEnv({});
+    expect(errors).toHaveLength(3);
+    expect(errors[0]).toContain("Storage から Neon を追加");
+    expect(errors[1]).toContain("SEED_LOGIN_PASSWORD が設定されていません");
+    expect(errors[2]).toContain("CRON_SECRET を設定してください");
   });
 
   it.each([
-    [undefined, "登録されていません"],
-    ["not a url", "接続文字列"],
-    [`https://${REF}.supabase.co`, "postgresql://"],
-    [`postgresql://postgres.${REF}:[YOUR-PASSWORD]@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres`, "[YOUR-PASSWORD]"],
-    [`postgresql://postgres:secret@db.${REF}.supabase.co:5432/postgres`, "IPv6"],
-    [`postgresql://postgres.${REF}:secret@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres`, "Transaction pooler"],
-    ["postgresql://postgres:secret@localhost:5432/postgres", "postgres.<プロジェクト ID>"],
-  ])("使えない接続文字列は理由を返す（%s）", (value, message) => {
-    const r = checkSupabaseDbUrl(value);
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toContain(message);
+    [{ DATABASE_URL: "not a url" }, "接続文字列"],
+    [{ DATABASE_URL: "https://example.com" }, "postgresql://"],
+    [{ DATABASE_URL: "postgres://postgres:postgres@localhost:5432/dm" }, "localhost"],
+    [{ DATABASE_URL_UNPOOLED: "mysql://x@y/z" }, "DATABASE_URL_UNPOOLED は postgresql://"],
+    [{ SEED_LOGIN_PASSWORD: "short-pass" }, "12 文字以上"],
+    [{ SEED_LOGIN_PASSWORD: "demo-admin-2026" }, "既定のパスワード"],
+    [{ SEED_ADMIN_PASSWORD: "demo-driver-2026" }, "SEED_ADMIN_PASSWORD に README"],
+    [{ CRON_SECRET: "short" }, "CRON_SECRET は 16 文字以上"],
+  ])("使えない値は理由を返す（%o）", (override, message) => {
+    const errors = checkProductionEnv({ ...OK_ENV, ...override });
+    expect(errors.join("\n")).toContain(message);
+  });
+});
+
+describe("見本の会社のログイン用パスワード", () => {
+  it("自分の PC の DB なら、未設定のとき README の既定値を使う", () => {
+    expect(isLocalDatabase("postgres://postgres:postgres@localhost:5432/dm")).toBe(true);
+    expect(isLocalDatabase("postgres://u:p@127.0.0.1/dm")).toBe(true);
+    expect(isLocalDatabase(NEON)).toBe(false);
+    expect(isLocalDatabase("not a url")).toBe(false);
+    expect(seedPasswords({}, "postgres://postgres:postgres@localhost:5432/dm")).toEqual({
+      admin: "demo-admin-2026",
+      driver: "demo-driver-2026",
+    });
   });
 
-  it("ログイン用パスワードは 8 文字以上で、README の既定値は使えない", () => {
-    expect(checkLoginPassword(undefined)).toContain("登録されていません");
-    expect(checkLoginPassword("short")).toContain("8 文字以上");
-    expect(checkLoginPassword("demo-admin-2026")).toContain("既定のパスワード");
-    expect(checkLoginPassword("a-long-enough-password")).toBeNull();
+  it("公開環境では既定値を使わない。SEED_LOGIN_PASSWORD を両方に使い、個別の指定があれば優先する", () => {
+    expect(() => seedPasswords({}, NEON)).toThrow(/SEED_LOGIN_PASSWORD が設定されていません/);
+    expect(seedPasswords({ SEED_LOGIN_PASSWORD: "shared-passphrase-1" }, NEON)).toEqual({
+      admin: "shared-passphrase-1",
+      driver: "shared-passphrase-1",
+    });
+    expect(seedPasswords({ SEED_LOGIN_PASSWORD: "shared-passphrase-1", SEED_DRIVER_PASSWORD: "driver-passphrase-2" }, NEON)).toEqual({
+      admin: "shared-passphrase-1",
+      driver: "driver-passphrase-2",
+    });
   });
 
-  it("Secret key は sb_secret_ か従来の service_role キー（JWT）だけ受け付ける", () => {
-    expect(checkSecretKey(undefined)).toContain("登録されていません");
-    expect(checkSecretKey("sb_publishable_xxx")).toContain("Publishable key");
-    expect(checkSecretKey("random")).toContain("形になっていません");
-    expect(checkSecretKey("sb_secret_xxx")).toBeNull();
-    expect(checkSecretKey("aaa.bbb.ccc")).toBeNull();
+  it("README に載っている既定のパスワードは、長さが足りていても使えない", () => {
+    expect(checkLoginPassword("X", undefined)).toContain("設定されていません");
+    expect(checkLoginPassword("X", "short")).toContain("12 文字以上");
+    expect(checkLoginPassword("X", "demo-admin-2026")).toContain("既定のパスワード");
+    expect(checkLoginPassword("X", "a-long-enough-passphrase")).toBeNull();
   });
 });

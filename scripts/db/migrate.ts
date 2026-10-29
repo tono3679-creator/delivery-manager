@@ -12,6 +12,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import postgres, { type Sql } from "postgres";
+import { toPostgresJsUrl } from "../../src/lib/db/url";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
 const BOOTSTRAP = "db/bootstrap.sql";
@@ -56,7 +57,7 @@ async function main() {
   const url = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL を設定してください");
   // 接続プーラーを通さない接続（Neon の DATABASE_URL_UNPOOLED）があればそちらを使う
-  const sql = postgres(url, { max: 1, prepare: false, onnotice: () => {} });
+  const sql = postgres(toPostgresJsUrl(url), { max: 1, prepare: false, onnotice: () => {} });
   try {
     await migrate(sql);
   } finally {

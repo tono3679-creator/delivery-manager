@@ -10,6 +10,7 @@
  */
 import postgres from "postgres";
 import { DEFAULT_DEMO_SEED } from "@/lib/demo/generator";
+import { toPostgresJsUrl } from "@/lib/db/url";
 import { migrate } from "../db/migrate";
 import { seedShowcase } from "../seed/seed";
 import { seedPasswords } from "../seed/users";
@@ -29,7 +30,7 @@ async function main() {
     process.exit(1);
   }
   const url = (process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL) as string;
-  const sql = postgres(url, { max: 1, prepare: false, onnotice: () => {} });
+  const sql = postgres(toPostgresJsUrl(url), { max: 1, prepare: false, onnotice: () => {} });
   try {
     await migrate(sql);
     await seedShowcase(sql, { seed: DEFAULT_DEMO_SEED, now: new Date(), passwords: seedPasswords(process.env, url) });

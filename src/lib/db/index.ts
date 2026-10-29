@@ -2,6 +2,7 @@ import "server-only";
 import postgres, { type Sql, type TransactionSql } from "postgres";
 import { serverEnv } from "@/lib/env";
 import { runAsUser } from "./rls";
+import { toPostgresJsUrl } from "./url";
 import { DB_TYPES } from "./types";
 
 declare global {
@@ -13,7 +14,7 @@ declare global {
  * 公開環境では Neon の接続プーラー（PgBouncer の Transaction モード）を通すため prepare: false。
  */
 export function db(): Sql {
-  globalThis.__dmSql ??= postgres(serverEnv.databaseUrl, {
+  globalThis.__dmSql ??= postgres(toPostgresJsUrl(serverEnv.databaseUrl), {
     prepare: false,
     max: Number(process.env.DATABASE_POOL_SIZE ?? 5),
     idle_timeout: 20,
